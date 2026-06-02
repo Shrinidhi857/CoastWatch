@@ -1,0 +1,7 @@
+Flask==2.3.2
+Flask-CORS==4.0.0
+firebase-admin==6.2.0
+python-dotenv==1.0.0
+geopy==2.3.0
+Shapely==2.0.1
+numpy<2.0.0
