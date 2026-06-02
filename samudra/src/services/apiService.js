@@ -234,6 +234,32 @@ export const geofencesAPI = {
   },
 
   /**
+   * Update geofence coordinates only
+   */
+  updateCoordinates: async (geofenceId, coordinates) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/geofences/${geofenceId}/coordinates`,
+        {
+          method: "PUT",
+          headers: apiHeaders,
+          body: JSON.stringify({ coordinates }),
+        },
+      );
+      if (!response.ok)
+        throw new Error("Failed to update geofence coordinates");
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error(
+        `Error updating geofence coordinates ${geofenceId}:`,
+        error,
+      );
+      throw error;
+    }
+  },
+
+  /**
    * Delete geofence
    */
   delete: async (geofenceId) => {

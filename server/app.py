@@ -1,7 +1,8 @@
 import os
 import json
+import traceback
 from datetime import datetime
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Blueprint
 from flask_cors import CORS
 import firebase_admin
 from firebase_admin import credentials, db, firestore
@@ -14,6 +15,15 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
+
+# =============================================
+# BLUEPRINT DEFINITIONS
+# =============================================
+boats_bp = Blueprint('boats', __name__, url_prefix='/api/boats')
+geofences_bp = Blueprint('geofences', __name__, url_prefix='/api/geofences')
+geofence_check_bp = Blueprint('geofence_check', __name__, url_prefix='/api/geofence-check')
+alerts_bp = Blueprint('alerts', __name__, url_prefix='/api/alerts')
+system_bp = Blueprint('system', __name__, url_prefix='/api')
 
 # Initialize Firebase
 try:
@@ -106,7 +116,7 @@ def coords_to_shapely(coordinates):
 # BOAT GEOMARKER ENDPOINTS
 # =============================================
 
-@app.route('/api/boats', methods=['GET'])
+@boats_bp.route('', methods=['GET'])
 def get_boats():
     """Get all boats with their geomarkers"""
     try:
@@ -130,7 +140,7 @@ def get_boats():
         }), 500
 
 
-@app.route('/api/boats/<boat_id>', methods=['GET'])
+@boats_bp.route('/<boat_id>', methods=['GET'])
 def get_boat(boat_id):
     """Get a specific boat by ID"""
     try:
@@ -157,7 +167,7 @@ def get_boat(boat_id):
         }), 500
 
 
-@app.route('/api/boats', methods=['POST'])
+@boats_bp.route('', methods=['POST'])
 def create_boat():
     """Create a new boat with geomarker"""
     try:
@@ -203,7 +213,7 @@ def create_boat():
         }), 500
 
 
-@app.route('/api/boats/<boat_id>', methods=['PUT'])
+@boats_bp.route('/<boat_id>', methods=['PUT'])
 def update_boat(boat_id):
     """Update a boat's geomarker and details"""
     try:
@@ -254,7 +264,7 @@ def update_boat(boat_id):
         }), 500
 
 
-@app.route('/api/boats/<boat_id>', methods=['DELETE'])
+@boats_bp.route('/<boat_id>', methods=['DELETE'])
 def delete_boat(boat_id):
     """Delete a boat"""
     try:
@@ -279,7 +289,7 @@ def delete_boat(boat_id):
         }), 500
 
 
-@app.route('/api/boats/<boat_id>/location', methods=['PUT'])
+@boats_bp.route('/<boat_id>/location', methods=['PUT'])
 def update_boat_location(boat_id):
     """Update only the location of a boat"""
     try:
@@ -328,7 +338,7 @@ def update_boat_location(boat_id):
 # GEOFENCING ENDPOINTS
 # =============================================
 
-@app.route('/api/geofences', methods=['GET'])
+@geofences_bp.route('', methods=['GET'])
 def get_geofences():
     """Get all geofences"""
     try:
@@ -362,7 +372,7 @@ def get_geofences():
         }), 500
 
 
-@app.route('/api/geofences/<geofence_id>', methods=['GET'])
+@geofences_bp.route('/<geofence_id>', methods=['GET'])
 def get_geofence(geofence_id):
     """Get a specific geofence by ID"""
     try:
@@ -398,7 +408,7 @@ def get_geofence(geofence_id):
         }), 500
 
 
-@app.route('/api/geofences/batch/create', methods=['POST'])
+@geofences_bp.route('/batch/create', methods=['POST'])
 def create_multiple_geofences():
     """Create multiple geofences at once"""
     try:
@@ -471,7 +481,7 @@ def create_multiple_geofences():
         }), 500
 
 
-@app.route('/api/geofences', methods=['POST'])
+@geofences_bp.route('', methods=['POST'])
 def create_geofence():
     """Create a new geofence with coordinates"""
     try:
@@ -542,7 +552,7 @@ def create_geofence():
         }), 500
 
 
-@app.route('/api/geofences/<geofence_id>', methods=['PUT'])
+@geofences_bp.route('/<geofence_id>', methods=['PUT'])
 def update_geofence(geofence_id):
     """Update a geofence"""
     try:
@@ -593,7 +603,7 @@ def update_geofence(geofence_id):
         }), 500
 
 
-@app.route('/api/geofences/<geofence_id>', methods=['DELETE'])
+@geofences_bp.route('/<geofence_id>', methods=['DELETE'])
 def delete_geofence(geofence_id):
     """Delete a geofence"""
     try:
@@ -626,7 +636,7 @@ def delete_geofence(geofence_id):
 # GEOFENCE CHECKING ENDPOINTS
 # =============================================
 
-@app.route('/api/geofence-check/boat/<boat_id>', methods=['GET'])
+@geofence_check_bp.route('/boat/<boat_id>', methods=['GET'])
 def check_boat_in_geofence(boat_id):
     """Check if a boat is in any geofence"""
     try:
@@ -700,7 +710,7 @@ def check_boat_in_geofence(boat_id):
         }), 500
 
 
-@app.route('/api/geofence-check/all-boats', methods=['GET'])
+@geofence_check_bp.route('/all-boats', methods=['GET'])
 def check_all_boats_geofence():
     """Check all boats against geofences"""
     try:
@@ -791,7 +801,7 @@ def check_all_boats_geofence():
         }), 500
 
 
-@app.route('/api/geofence-check/location', methods=['POST'])
+@geofence_check_bp.route('/location', methods=['POST'])
 def check_location_in_geofence():
     """Check if a specific location is in any geofence"""
     try:
@@ -861,7 +871,7 @@ def check_location_in_geofence():
 # ALERTS AND NOTIFICATIONS
 # =============================================
 
-@app.route('/api/alerts', methods=['GET'])
+@alerts_bp.route('', methods=['GET'])
 def get_alerts():
     """Get all geofence violations/alerts"""
     try:
@@ -898,7 +908,7 @@ def get_alerts():
         }), 500
 
 
-@app.route('/api/alerts/<boat_id>', methods=['GET'])
+@alerts_bp.route('/<boat_id>', methods=['GET'])
 def get_boat_alerts(boat_id):
     """Get alerts for a specific boat"""
     try:
@@ -969,7 +979,7 @@ def get_boat_alerts(boat_id):
 # HEALTH AND INFO ENDPOINTS
 # =============================================
 
-@app.route('/api/health', methods=['GET'])
+@system_bp.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
     return jsonify({
@@ -980,7 +990,7 @@ def health():
     }), 200
 
 
-@app.route('/api/stats', methods=['GET'])
+@system_bp.route('/stats', methods=['GET'])
 def get_stats():
     """Get statistics about boats and geofences"""
     try:
@@ -1008,6 +1018,71 @@ def get_stats():
             'status': 'error',
             'message': str(e)
         }), 500
+
+
+# =============================================
+# GEOFENCE COORDINATE EDITING ENDPOINT
+# =============================================
+
+@geofences_bp.route('/<geofence_id>/coordinates', methods=['PUT'])
+def update_geofence_coordinates(geofence_id):
+    """Update only the coordinates of a geofence"""
+    try:
+        data = request.get_json()
+        
+        if 'coordinates' not in data:
+            return jsonify({
+                'status': 'error',
+                'message': 'Missing coordinates'
+            }), 400
+        
+        coordinates = data.get('coordinates')
+        if not isinstance(coordinates, list) or len(coordinates) < 3:
+            return jsonify({
+                'status': 'error',
+                'message': 'Coordinates must be a list of at least 3 points [lng, lat]'
+            }), 400
+        
+        geofence_ref = db_firestore.collection('geofences').document(geofence_id)
+        
+        if not geofence_ref.get().exists:
+            return jsonify({
+                'status': 'error',
+                'message': f'Geofence with ID {geofence_id} not found'
+            }), 404
+        
+        update_data = {
+            'coordinates': coords_to_db(coordinates),  # Convert for Firestore
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        geofence_ref.update(update_data)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Geofence coordinates updated successfully',
+            'geofence_id': geofence_id,
+            'data': {
+                'coordinates': coordinates,
+                'updated_at': update_data['updated_at']
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
+# =============================================
+# BLUEPRINT REGISTRATION
+# =============================================
+
+app.register_blueprint(boats_bp)
+app.register_blueprint(geofences_bp)
+app.register_blueprint(geofence_check_bp)
+app.register_blueprint(alerts_bp)
+app.register_blueprint(system_bp)
 
 
 if __name__ == '__main__':

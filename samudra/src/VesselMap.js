@@ -5,6 +5,7 @@ import {
   Marker,
   Popup,
   Polygon,
+  Polyline,
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
@@ -12,18 +13,31 @@ import "leaflet/dist/leaflet.css";
 import {
   boatsAPI,
   geofencesAPI,
-  geofenceCheckAPI,
   alertsAPI,
   systemAPI,
 } from "./services/apiService";
 import {
   formatBoatFromServer,
   formatGeofenceFromServer,
-  formatBoatForServer,
-  formatGeofenceForServer,
   coordsToLeaflet,
 } from "./utils/helpers";
-import { MAP_CONFIG } from "./config/config";
+import { MAP_CONFIG, SIMULATION_CONFIG } from "./config/config";
+import {
+  generateRealisticPath,
+  initializeBoat,
+  updateBoatPosition,
+  startBoatMovement,
+  stopBoatMovement,
+  getBoatIcon,
+  REAL_WORLD_PATH,
+  RESTRICTED_ZONE_POLYGON,
+} from "./utils/boatSimulation";
+import {
+  AlertManager,
+  createAlert,
+  ALERT_MESSAGES,
+  ALERT_TYPES,
+} from "./utils/alertSystem";
 
 // Custom boat icon
 const boatIcon = new L.Icon({
@@ -45,30 +59,21 @@ const boatIconRed = new L.Icon({
   className: "boat-marker-alert",
 });
 
-// Point-in-polygon algorithm
-const isPointInPolygon = (point, polygon) => {
-  const [x, y] = point;
-  let inside = false;
-
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-
-    const intersect =
-      yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
-    if (intersect) inside = !inside;
-  }
-
-  return inside;
-};
-
 // MapClickHandler component to capture map clicks
-const MapClickHandler = ({ drawMode, onMapClick, drawnPolygon }) => {
+const MapClickHandler = ({
+  drawMode,
+  editMode,
+  onMapClick,
+  onEditMapClick,
+}) => {
   useMapEvents({
     click: (e) => {
       if (drawMode) {
         const { lat, lng } = e.latlng;
         onMapClick([lng, lat]);
+      } else if (editMode) {
+        const { lat, lng } = e.latlng;
+        onEditMapClick([lng, lat]);
       }
     },
   });
@@ -84,9 +89,24 @@ const VesselMap = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [serverConnected, setServerConnected] = useState(false);
+  const [editingGeofence, setEditingGeofence] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editedCoordinates, setEditedCoordinates] = useState(null);
+
+  // Simulation state
+  const [boatState, setBoatState] = useState(null);
+  const [simulationActive, setSimulationActive] = useState(false);
+  const [simulationAlerts, setSimulationAlerts] = useState([]);
+  const [showSimulation, setShowSimulation] = useState(false);
+  const [selectedPath, setSelectedPath] = useState("harbor_tour");
+  const [boatTrail, setBoatTrail] = useState([]);
+
   const mapRef = useRef();
   const boatsIntervalRef = useRef(null);
   const alertsIntervalRef = useRef(null);
+  const simulationIntervalRef = useRef(null);
+  const alertManagerRef = useRef(new AlertManager());
+  const restrictedZoneEnteredRef = useRef(false);
 
   // Initialize and fetch data from server
   useEffect(() => {
@@ -192,7 +212,9 @@ const VesselMap = () => {
         setDrawMode(false);
       } catch (err) {
         console.error("Error creating geofence:", err);
-        alert(`Failed to create geofence: ${err.message || "Please try again."}`);
+        alert(
+          `Failed to create geofence: ${err.message || "Please try again."}`,
+        );
       }
     } else {
       alert("A geofence must have at least 3 points");
@@ -223,6 +245,228 @@ const VesselMap = () => {
       alert("Failed to delete boat. Please try again.");
     }
   };
+
+  const startEditingGeofence = (geofence) => {
+    setEditingGeofence(geofence);
+    setEditedCoordinates([...geofence.coordinates]);
+    setEditMode(true);
+  };
+
+  const cancelEditGeofence = () => {
+    setEditingGeofence(null);
+    setEditedCoordinates(null);
+    setEditMode(false);
+  };
+
+  const saveGeofenceEdit = async () => {
+    if (!editingGeofence || !editedCoordinates) return;
+
+    if (editedCoordinates.length < 3) {
+      alert("A geofence must have at least 3 points");
+      return;
+    }
+
+    try {
+      await geofencesAPI.updateCoordinates(
+        editingGeofence.id,
+        editedCoordinates,
+      );
+      await fetchGeofences();
+      cancelEditGeofence();
+    } catch (err) {
+      console.error("Error updating geofence coordinates:", err);
+      alert(`Failed to update geofence: ${err.message || "Please try again."}`);
+    }
+  };
+
+  const addCoordinateToEdit = (coord) => {
+    if (editedCoordinates) {
+      setEditedCoordinates([...editedCoordinates, coord]);
+    }
+  };
+
+  const removeCoordinateFromEdit = (index) => {
+    if (editedCoordinates && editedCoordinates.length > 3) {
+      setEditedCoordinates(editedCoordinates.filter((_, i) => i !== index));
+    } else {
+      alert("A geofence must have at least 3 points");
+    }
+  };
+
+  // =============================================
+  // SIMULATION FUNCTIONS
+  // =============================================
+
+  /**
+   * Initialize boat simulation
+   */
+  const initializeSimulation = () => {
+    // Use the real-world path for simulation
+    const path = REAL_WORLD_PATH;
+    const startPosition = path[0]; // Start from first coordinate in path
+
+    const newBoatState = initializeBoat(
+      "sim-boat-1",
+      startPosition,
+      path, // Use REAL_WORLD_PATH directly
+    );
+
+    setBoatState(newBoatState);
+    setBoatTrail([startPosition]);
+    setSimulationAlerts([]);
+    restrictedZoneEnteredRef.current = false;
+
+    // Add initialization alert
+    const initAlert = createAlert(
+      ALERT_TYPES.INFO,
+      ALERT_MESSAGES.SIMULATION_STARTED,
+      "boat_sim",
+    );
+    setSimulationAlerts([initAlert]);
+    alertManagerRef.current.addAlert(initAlert);
+  };
+
+  /**
+   * Start the boat simulation
+   */
+  const startSimulation = () => {
+    if (!boatState) {
+      initializeSimulation();
+      setSimulationActive(true);
+      return;
+    }
+
+    if (simulationActive) return; // Already running
+
+    const updatedBoatState = startBoatMovement(boatState);
+    setBoatState(updatedBoatState);
+    setSimulationActive(true);
+
+    const startAlert = createAlert(
+      ALERT_TYPES.INFO,
+      ALERT_MESSAGES.SIMULATION_STARTED,
+      "boat_sim",
+    );
+    alertManagerRef.current.addAlert(startAlert);
+  };
+
+  /**
+   * Stop the boat simulation
+   */
+  const stopSimulation = () => {
+    if (!simulationActive || !boatState) return;
+
+    const stoppedBoatState = stopBoatMovement(boatState);
+    setBoatState(stoppedBoatState);
+    setSimulationActive(false);
+
+    const stopAlert = createAlert(
+      ALERT_TYPES.INFO,
+      ALERT_MESSAGES.SIMULATION_STOPPED,
+      "boat_sim",
+    );
+    alertManagerRef.current.addAlert(stopAlert);
+  };
+
+  /**
+   * Reset the simulation
+   */
+  const resetSimulation = () => {
+    stopSimulation();
+    setBoatState(null);
+    setBoatTrail([]);
+    setSimulationAlerts([]);
+    restrictedZoneEnteredRef.current = false;
+
+    const resetAlert = createAlert(
+      ALERT_TYPES.INFO,
+      ALERT_MESSAGES.SIMULATION_RESET,
+      "boat_sim",
+    );
+    alertManagerRef.current.addAlert(resetAlert);
+  };
+
+  /**
+   * Simulation update loop
+   */
+  useEffect(() => {
+    if (!simulationActive || !boatState) {
+      if (simulationIntervalRef.current) {
+        clearInterval(simulationIntervalRef.current);
+      }
+      return;
+    }
+
+    // Use the predefined restricted zone polygon for collision detection
+    // Pass coordinates in [lat, lng] format - updateBoatPosition handles GeoJSON conversion
+    const polygonCoords = RESTRICTED_ZONE_POLYGON;
+
+    simulationIntervalRef.current = setInterval(() => {
+      setBoatState((prevState) => {
+        if (!prevState || !prevState.isMoving) return prevState;
+
+        // Update boat position with restricted zone polygon
+        // Turf.js detects with production-grade accuracy
+        const updatedState = updateBoatPosition(prevState, polygonCoords);
+
+        // Update trail
+        setBoatTrail((prev) => [...prev, updatedState.position]);
+
+        // Handle restricted zone alerts
+        if (updatedState.inRestrictedZone) {
+          if (
+            !restrictedZoneEnteredRef.current &&
+            updatedState.hasEnteredRestrictedZone
+          ) {
+            // First time entering - SERIOUS ALERT!
+            restrictedZoneEnteredRef.current = true;
+            const alert = createAlert(
+              ALERT_TYPES.DANGER,
+              ALERT_MESSAGES.BOAT_ENTERED_RESTRICTED,
+              "boat_sim",
+            );
+            setSimulationAlerts((prev) => [...prev, alert]);
+            alertManagerRef.current.addAlert(alert);
+            console.warn(
+              "⚠️ BOAT ENTERED RESTRICTED ZONE!",
+              updatedState.position,
+            );
+          }
+        } else {
+          // Left restricted zone
+          if (restrictedZoneEnteredRef.current) {
+            restrictedZoneEnteredRef.current = false;
+            const alert = createAlert(
+              ALERT_TYPES.INFO,
+              ALERT_MESSAGES.BOAT_LEFT_RESTRICTED,
+              "boat_sim",
+            );
+            setSimulationAlerts((prev) => [...prev, alert]);
+            alertManagerRef.current.addAlert(alert);
+          }
+        }
+
+        // Check if simulation is complete
+        if (!updatedState.isMoving) {
+          const completeAlert = createAlert(
+            ALERT_TYPES.SUCCESS,
+            ALERT_MESSAGES.SIMULATION_COMPLETED,
+            "boat_sim",
+          );
+          alertManagerRef.current.addAlert(completeAlert);
+          setSimulationActive(false);
+        }
+
+        return updatedState;
+      });
+    }, SIMULATION_CONFIG.UPDATE_INTERVAL);
+
+    return () => {
+      if (simulationIntervalRef.current) {
+        clearInterval(simulationIntervalRef.current);
+      }
+    };
+  }, [simulationActive, boatState, geofences]);
 
   return (
     <div className="w-full h-screen flex flex-col">
@@ -255,24 +499,32 @@ const VesselMap = () => {
               </p>
             )}
           </div>
-          <button
-            onClick={() => {
-              if (!drawMode) {
-                setDrawMode(true);
-                setDrawnPolygon(null);
-              } else {
-                setDrawMode(false);
-                setDrawnPolygon(null);
-              }
-            }}
-            className={`px-4 py-2 rounded font-semibold transition ${
-              drawMode
-                ? "bg-red-500 hover:bg-red-600 text-white"
-                : "bg-blue-500 hover:bg-blue-600 text-white"
-            }`}
-          >
-            {drawMode ? "Exit Draw Mode" : "Add Geofence"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowSimulation(!showSimulation)}
+              className="px-4 py-2 rounded font-semibold transition bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {showSimulation ? "Hide" : "Show"} Simulation
+            </button>
+            <button
+              onClick={() => {
+                if (!drawMode) {
+                  setDrawMode(true);
+                  setDrawnPolygon(null);
+                } else {
+                  setDrawMode(false);
+                  setDrawnPolygon(null);
+                }
+              }}
+              className={`px-4 py-2 rounded font-semibold transition ${
+                drawMode
+                  ? "bg-red-500 hover:bg-red-600 text-white"
+                  : "bg-blue-500 hover:bg-blue-600 text-white"
+              }`}
+            >
+              {drawMode ? "Exit Draw Mode" : "Add Geofence"}
+            </button>
+          </div>
         </div>
 
         {/* Drawing Instructions */}
@@ -345,6 +597,126 @@ const VesselMap = () => {
         </div>
       )}
 
+      {/* Simulation Panel */}
+      {showSimulation && (
+        <div className="bg-purple-50 border-l-4 border-purple-500 p-4 mx-4 mt-4 rounded">
+          <h3 className="text-purple-800 font-bold mb-3">
+            🚤 Boat Simulation Control
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Controls */}
+            <div>
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-gray-700">
+                  Simulation Path:
+                </label>
+                <select
+                  value={selectedPath}
+                  onChange={(e) => {
+                    setSelectedPath(e.target.value);
+                    if (!simulationActive) initializeSimulation();
+                  }}
+                  disabled={simulationActive}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm disabled:bg-gray-100"
+                >
+                  <option value="harbor_tour">🏖️ Harbor Tour</option>
+                  <option value="coastal_patrol">🚢 Coastal Patrol</option>
+                  <option value="restricted_zone_approach">
+                    ⚠️ Restricted Zone Approach
+                  </option>
+                </select>
+
+                <div className="flex gap-2 mt-3">
+                  {!simulationActive ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (!boatState) initializeSimulation();
+                          startSimulation();
+                        }}
+                        className="flex-1 px-3 py-2 bg-green-600 text-white text-sm font-semibold rounded hover:bg-green-700 transition"
+                      >
+                        ▶ Start Simulation
+                      </button>
+                      <button
+                        onClick={resetSimulation}
+                        className="flex-1 px-3 py-2 bg-gray-600 text-white text-sm font-semibold rounded hover:bg-gray-700 transition"
+                      >
+                        ↻ Reset
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={stopSimulation}
+                      className="flex-1 px-3 py-2 bg-red-600 text-white text-sm font-semibold rounded hover:bg-red-700 transition"
+                    >
+                      ⏹ Stop Simulation
+                    </button>
+                  )}
+                </div>
+
+                {boatState && (
+                  <div className="mt-3 p-2 bg-white border border-purple-300 rounded text-xs">
+                    <p className="text-gray-700">
+                      <span className="font-semibold">Status:</span>{" "}
+                      {simulationActive ? "▶ Running" : "⏸ Paused"}
+                    </p>
+                    <p className="text-gray-700">
+                      <span className="font-semibold">Position:</span>{" "}
+                      {boatState.position[0].toFixed(4)},{" "}
+                      {boatState.position[1].toFixed(4)}
+                    </p>
+                    <p className="text-gray-700">
+                      <span className="font-semibold">Heading:</span>{" "}
+                      {boatState.heading.toFixed(0)}°
+                    </p>
+                    <p className="text-gray-700">
+                      <span className="font-semibold">Progress:</span>{" "}
+                      {boatState.pathIndex} / {boatState.path.length}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Alerts */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Simulation Alerts ({simulationAlerts.length}):
+              </label>
+              <div className="space-y-1 max-h-32 overflow-y-auto border border-purple-300 rounded p-2 bg-white">
+                {simulationAlerts.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    No alerts yet. Start the simulation...
+                  </p>
+                ) : (
+                  simulationAlerts.map((alert) => (
+                    <div
+                      key={alert.id}
+                      className={`text-xs p-2 rounded border-l-2 ${
+                        alert.type === "danger"
+                          ? "bg-red-50 border-red-500 text-red-700"
+                          : alert.type === "warning"
+                            ? "bg-amber-50 border-amber-500 text-amber-700"
+                            : alert.type === "success"
+                              ? "bg-green-50 border-green-500 text-green-700"
+                              : "bg-blue-50 border-blue-500 text-blue-700"
+                      }`}
+                    >
+                      {alert.message}
+                      <span className="text-xs opacity-70">
+                        {" "}
+                        {alert.timestamp.toLocaleTimeString()}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main content area */}
       <div className="flex-1 flex gap-4 p-4 bg-gray-100">
         {/* Map Container */}
@@ -357,7 +729,9 @@ const VesselMap = () => {
           >
             <MapClickHandler
               drawMode={drawMode}
+              editMode={editMode}
               onMapClick={handleMapClick}
+              onEditMapClick={addCoordinateToEdit}
               drawnPolygon={drawnPolygon}
             />
             <TileLayer
@@ -432,6 +806,40 @@ const VesselMap = () => {
               </>
             )}
 
+            {/* Edited Geofence Polygon (while editing) */}
+            {editMode && editedCoordinates && editedCoordinates.length > 0 && (
+              <>
+                {/* Edited polygon */}
+                {editedCoordinates.length >= 3 && (
+                  <Polygon
+                    positions={coordsToLeaflet(editedCoordinates)}
+                    pathOptions={{
+                      color: "purple",
+                      weight: 3,
+                      opacity: 0.8,
+                      fillOpacity: 0.15,
+                      dashArray: "5, 5",
+                    }}
+                  />
+                )}
+                {/* Edited points as markers */}
+                {editedCoordinates.map((coord, idx) => (
+                  <Marker
+                    key={`edit-${idx}`}
+                    position={[coord[1], coord[0]]}
+                    icon={L.icon({
+                      iconUrl:
+                        "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI5IiBmaWxsPSIjYTI1NWY3IiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMiIvPjwvc3ZnPg==",
+                      iconSize: [24, 24],
+                      iconAnchor: [12, 12],
+                    })}
+                  >
+                    <Popup>Edit Point {idx + 1}</Popup>
+                  </Marker>
+                ))}
+              </>
+            )}
+
             {/* Vessel Markers */}
             {vessels.map((vessel) => {
               const inGeofence = vessel.in_restricted_zone || false;
@@ -484,6 +892,69 @@ const VesselMap = () => {
                 </Marker>
               );
             })}
+
+            {/* Boat Simulation Marker and Trail */}
+            {showSimulation && boatState && (
+              <>
+                {/* Boat Trail Polyline */}
+                {boatTrail.length > 1 && (
+                  <Polyline
+                    positions={boatTrail.map((pos) => [pos[0], pos[1]])}
+                    pathOptions={{
+                      color: boatState.inRestrictedZone ? "#ef4444" : "#3b82f6",
+                      weight: 3,
+                      opacity: 0.7,
+                    }}
+                  />
+                )}
+
+                {/* Boat Marker */}
+                <Marker
+                  position={[boatState.position[0], boatState.position[1]]}
+                  icon={getBoatIcon(boatState)}
+                  title="Simulated Boat"
+                >
+                  <Popup>
+                    <div className="p-2">
+                      <h3 className="font-bold text-lg text-purple-900">
+                        🚤 Simulated Boat
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-semibold">Position:</span>{" "}
+                        {boatState.position[0].toFixed(4)},{" "}
+                        {boatState.position[1].toFixed(4)}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-semibold">Heading:</span>{" "}
+                        {boatState.heading.toFixed(0)}°
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-semibold">Speed:</span>{" "}
+                        {boatState.speed} knots
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-semibold">
+                          Distance Traveled:
+                        </span>{" "}
+                        {(
+                          boatState.traveledPath.length *
+                          SIMULATION_CONFIG.INTERPOLATION_SPEED
+                        ).toFixed(2)}{" "}
+                        km
+                      </p>
+                      {boatState.inRestrictedZone && (
+                        <p className="text-sm text-red-600 font-bold mt-2">
+                          🚨 IN RESTRICTED ZONE
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        Status: {simulationActive ? "▶ Running" : "⏸ Paused"}
+                      </p>
+                    </div>
+                  </Popup>
+                </Marker>
+              </>
+            )}
           </MapContainer>
         </div>
 
@@ -596,12 +1067,22 @@ const VesselMap = () => {
                       <h4 className="font-bold text-gray-800">
                         {geofence.name}
                       </h4>
-                      <button
-                        onClick={() => deleteGeofence(geofence.id)}
-                        className="text-red-600 hover:text-red-800 font-bold"
-                      >
-                        ✕
-                      </button>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => startEditingGeofence(geofence)}
+                          className="text-blue-600 hover:text-blue-800 hover:bg-blue-100 px-2 py-1 rounded transition text-xs font-bold"
+                          title="Edit geofence"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => deleteGeofence(geofence.id)}
+                          className="text-red-600 hover:text-red-800 hover:bg-red-100 px-2 py-1 rounded transition text-xs font-bold"
+                          title="Delete geofence"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                     <div className="text-sm text-gray-600 space-y-1">
                       <p>
@@ -639,6 +1120,89 @@ const VesselMap = () => {
           </div>
         </div>
       </div>
+
+      {/* Edit Geofence Modal */}
+      {editMode && editingGeofence && editedCoordinates && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-2xl w-11/12 max-w-2xl max-h-96 overflow-y-auto">
+            <div className="bg-blue-900 text-white p-4 font-bold flex justify-between items-center sticky top-0">
+              <span>Edit Geofence: {editingGeofence.name}</span>
+              <button
+                onClick={cancelEditGeofence}
+                className="text-xl font-bold hover:text-red-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-4">
+                <p className="text-sm text-blue-800 font-semibold mb-2">
+                  💡 Instructions:
+                </p>
+                <p className="text-xs text-blue-700">
+                  Click on the map to add new points. Use the remove button to
+                  delete points. A minimum of 3 points is required.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-gray-800 mb-2">
+                  Current Coordinates ({editedCoordinates.length} points):
+                </h4>
+                <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border border-gray-200 rounded p-3 bg-gray-50">
+                  {editedCoordinates.map((coord, idx) => (
+                    <div
+                      key={idx}
+                      className="flex justify-between items-center bg-white p-2 rounded border border-gray-300 text-sm"
+                    >
+                      <span className="font-mono text-gray-700">
+                        Point {idx + 1}: [{coord[0].toFixed(6)},{" "}
+                        {coord[1].toFixed(6)}]
+                      </span>
+                      <button
+                        onClick={() => removeCoordinateFromEdit(idx)}
+                        disabled={editedCoordinates.length <= 3}
+                        className={`px-2 py-1 text-xs font-bold rounded ${
+                          editedCoordinates.length <= 3
+                            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                            : "bg-red-500 text-white hover:bg-red-600"
+                        }`}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={saveGeofenceEdit}
+                  className="flex-1 bg-green-600 text-white font-semibold py-2 px-4 rounded hover:bg-green-700 transition"
+                >
+                  ✓ Save Changes
+                </button>
+                <button
+                  onClick={cancelEditGeofence}
+                  className="flex-1 bg-gray-500 text-white font-semibold py-2 px-4 rounded hover:bg-gray-600 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 mt-4">
+                <p className="text-xs text-amber-800">
+                  <span className="font-semibold">Note:</span> To add new
+                  coordinates in the modal, the map editing mode is being
+                  bypassed. Click "Save Changes" to apply modifications, or
+                  "Cancel" to discard them.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
