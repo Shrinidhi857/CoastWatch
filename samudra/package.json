@@ -10,6 +10,7 @@
     "@turf/boolean-point-in-polygon": "^7.3.5",
     "@turf/helpers": "^7.3.5",
     "leaflet": "^1.9.4",
+    "leaflet.heat": "^0.2.0",
     "point-in-polygon": "^1.1.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

@@ -426,10 +426,36 @@ export const systemAPI = {
   },
 };
 
+// =============================================
+// DEPTH HEATMAP OPERATIONS
+// =============================================
+
+export const depthAPI = {
+  /**
+   * Get depth heatmap data
+   */
+  getHeatmapData: async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/depth-heatmap`, {
+        method: "GET",
+        headers: apiHeaders,
+      });
+      if (!response.ok) throw new Error("Failed to fetch depth heatmap data");
+      const data = await response.json();
+      return data.points || [];
+    } catch (error) {
+      console.error("Error fetching depth heatmap data:", error);
+      throw error;
+    }
+  },
+};
+
 export default {
   boats: boatsAPI,
   geofences: geofencesAPI,
   geofenceCheck: geofenceCheckAPI,
   alerts: alertsAPI,
   system: systemAPI,
+  depth: depthAPI,
 };
+

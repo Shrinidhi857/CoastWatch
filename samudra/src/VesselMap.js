@@ -7,14 +7,17 @@ import {
   Polygon,
   Polyline,
   useMapEvents,
+  useMap,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet.heat";
 import {
   boatsAPI,
   geofencesAPI,
   alertsAPI,
   systemAPI,
+  depthAPI,
 } from "./services/apiService";
 import {
   formatBoatFromServer,
@@ -80,6 +83,37 @@ const MapClickHandler = ({
   return null;
 };
 
+// 1. Create the Custom Heatmap Component
+const HeatmapLayer = ({ points }) => {
+  const map = useMap(); // Access the underlying Leaflet map instance
+
+  useEffect(() => {
+    if (!points || points.length === 0) return;
+
+    // Initialize the heat layer
+    const heatLayer = L.heatLayer(points, {
+      radius: 35,
+      blur: 25,
+      maxZoom: 13,
+      // Custom gradient: 0.0 is shallow (warm), 1.0 is deep (cool)
+      gradient: {
+        0.2: "red",     // Shallow
+        0.4: "orange",  // Medium-shallow
+        0.6: "yellow",  // Medium
+        0.8: "blue",    // Deep
+        1.0: "navy",    // Trench/very deep
+      },
+    }).addTo(map);
+
+    // Cleanup: remove the layer when the component unmounts or data changes
+    return () => {
+      map.removeLayer(heatLayer);
+    };
+  }, [map, points]);
+
+  return null; // This component doesn't render HTML, it mutates the map
+};
+
 const VesselMap = () => {
   const [vessels, setVessels] = useState([]);
   const [geofences, setGeofences] = useState([]);
@@ -100,6 +134,13 @@ const VesselMap = () => {
   const [showSimulation, setShowSimulation] = useState(false);
   const [selectedPath, setSelectedPath] = useState("harbor_tour");
   const [boatTrail, setBoatTrail] = useState([]);
+
+  // Selected boat for detailed view
+  const [selectedVessel, setSelectedVessel] = useState(null);
+
+  // Heatmap state
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [heatmapPoints, setHeatmapPoints] = useState([]);
 
   const mapRef = useRef();
   const boatsIntervalRef = useRef(null);
@@ -149,6 +190,21 @@ const VesselMap = () => {
       if (alertsIntervalRef.current) clearInterval(alertsIntervalRef.current);
     };
   }, []);
+
+  // Fetch depth heatmap data when showHeatmap is toggled
+  useEffect(() => {
+    if (showHeatmap && heatmapPoints.length === 0) {
+      const fetchHeatmapData = async () => {
+        try {
+          const points = await depthAPI.getHeatmapData();
+          setHeatmapPoints(points);
+        } catch (err) {
+          console.error("Failed to fetch depth heatmap data:", err);
+        }
+      };
+      fetchHeatmapData();
+    }
+  }, [showHeatmap, heatmapPoints]);
 
   // Fetch boats from server
   const fetchBoats = async () => {
@@ -239,6 +295,10 @@ const VesselMap = () => {
   const deleteVessel = async (id) => {
     try {
       await boatsAPI.delete(id);
+      // Close details modal if it was the selected vessel
+      if (selectedVessel && selectedVessel.id === id) {
+        setSelectedVessel(null);
+      }
       await fetchBoats(); // Refresh boats from server
     } catch (err) {
       console.error("Error deleting boat:", err);
@@ -507,6 +567,16 @@ const VesselMap = () => {
               {showSimulation ? "Hide" : "Show"} Simulation
             </button>
             <button
+              onClick={() => setShowHeatmap(!showHeatmap)}
+              className={`px-4 py-2 rounded font-semibold transition ${
+                showHeatmap
+                  ? "bg-teal-600 hover:bg-teal-700 text-white"
+                  : "bg-teal-800 hover:bg-teal-900 text-white"
+              }`}
+            >
+              {showHeatmap ? "Hide" : "Show"} Depth Heatmap
+            </button>
+            <button
               onClick={() => {
                 if (!drawMode) {
                   setDrawMode(true);
@@ -739,6 +809,11 @@ const VesselMap = () => {
               attribution={MAP_CONFIG.ATTRIBUTION}
             />
 
+            {/* Seafloor depth heatmap layer */}
+            {showHeatmap && heatmapPoints.length > 0 && (
+              <HeatmapLayer points={heatmapPoints} />
+            )}
+
             {/* Geofence Polygons */}
             {geofences.map((geofence) => (
               <Polygon
@@ -850,43 +925,83 @@ const VesselMap = () => {
                   position={[vessel.lat, vessel.lng]}
                   icon={inGeofence ? boatIconRed : boatIcon}
                   title={vessel.name}
+                  eventHandlers={{
+                    click: () => setSelectedVessel(vessel),
+                  }}
                 >
                   <Popup>
-                    <div className="p-2">
+                    <div className="p-3 w-64">
                       <h3 className="font-bold text-lg text-blue-900">
                         {vessel.name}
                       </h3>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-semibold">Status:</span>{" "}
-                        {vessel.status}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-semibold">Speed:</span>{" "}
-                        {vessel.speed} knots
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-semibold">Heading:</span>{" "}
-                        {vessel.heading}°
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-semibold">Type:</span>{" "}
-                        {vessel.vessel_type}
-                      </p>
-                      <p className="text-sm text-gray-600 mt-2">
-                        <span className="font-semibold">Position:</span>{" "}
-                        {vessel.lat.toFixed(4)}, {vessel.lng.toFixed(4)}
-                      </p>
-                      {vessel.destination && (
-                        <p className="text-sm text-gray-600">
-                          <span className="font-semibold">Destination:</span>{" "}
-                          {vessel.destination}
-                        </p>
-                      )}
-                      {inGeofence && (
-                        <p className="text-sm text-red-600 font-bold mt-2">
-                          ⚠️ In Restricted Zone
-                        </p>
-                      )}
+                      <div className="mt-3 space-y-2 text-sm text-gray-600">
+                        <div className="flex justify-between">
+                          <span className="font-semibold">Status:</span>
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-semibold ${
+                              vessel.status === "Active"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
+                          >
+                            {vessel.status}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-semibold">Speed:</span>
+                          <span>{vessel.speed} knots</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-semibold">Heading:</span>
+                          <span>{vessel.heading}°</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-semibold">Type:</span>
+                          <span>{vessel.vessel_type}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="font-semibold">Crew:</span>
+                          <span>{vessel.crew_count}</span>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-gray-300">
+                          <p className="text-xs text-gray-500">
+                            <span className="font-semibold">Position:</span>
+                            <br />
+                            {vessel.lat.toFixed(6)}, {vessel.lng.toFixed(6)}
+                          </p>
+                        </div>
+                        {vessel.destination && (
+                          <div className="mt-2 pt-2 border-t border-gray-300">
+                            <p className="text-xs">
+                              <span className="font-semibold">
+                                Destination:
+                              </span>{" "}
+                              {vessel.destination}
+                            </p>
+                          </div>
+                        )}
+                        {inGeofence && (
+                          <div className="mt-2 pt-2 border-t border-red-300 bg-red-50 p-2 rounded">
+                            <p className="text-red-700 font-bold text-xs">
+                              ⚠️ In Restricted Zone
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          onClick={() => setSelectedVessel(vessel)}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                        >
+                          Details
+                        </button>
+                        <button
+                          onClick={() => deleteVessel(vessel.id)}
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </Popup>
                 </Marker>
@@ -1198,6 +1313,172 @@ const VesselMap = () => {
                   bypassed. Click "Save Changes" to apply modifications, or
                   "Cancel" to discard them.
                 </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Boat Details Modal */}
+      {selectedVessel && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-2xl w-11/12 max-w-2xl max-h-96 overflow-y-auto">
+            <div className="bg-blue-900 text-white p-4 font-bold flex justify-between items-center sticky top-0">
+              <span>⚓ Vessel Details: {selectedVessel.name}</span>
+              <button
+                onClick={() => setSelectedVessel(null)}
+                className="text-xl font-bold hover:text-red-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Header Section */}
+              <div className="flex items-start justify-between border-b pb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    {selectedVessel.name}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    ID: {selectedVessel.id}
+                  </p>
+                </div>
+                <div>
+                  <span
+                    className={`inline-block px-3 py-2 rounded-full text-sm font-semibold ${
+                      selectedVessel.status === "Active"
+                        ? "bg-green-100 text-green-800"
+                        : "bg-yellow-100 text-yellow-800"
+                    }`}
+                  >
+                    {selectedVessel.status}
+                  </span>
+                  {selectedVessel.in_restricted_zone && (
+                    <div className="mt-2 bg-red-100 text-red-800 px-3 py-2 rounded-full text-sm font-semibold">
+                      ⚠️ Restricted Zone
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Vessel Information Grid */}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h3 className="font-bold text-gray-700 mb-3">Vessel Info</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 uppercase">
+                        Vessel Type
+                      </label>
+                      <p className="text-sm text-gray-800 mt-1">
+                        {selectedVessel.vessel_type}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 uppercase">
+                        Crew Count
+                      </label>
+                      <p className="text-sm text-gray-800 mt-1">
+                        {selectedVessel.crew_count} members
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 uppercase">
+                        Destination
+                      </label>
+                      <p className="text-sm text-gray-800 mt-1">
+                        {selectedVessel.destination || "Not set"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-bold text-gray-700 mb-3">
+                    Movement Data
+                  </h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 uppercase">
+                        Speed
+                      </label>
+                      <p className="text-sm text-gray-800 mt-1">
+                        {selectedVessel.speed} knots
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 uppercase">
+                        Heading
+                      </label>
+                      <p className="text-sm text-gray-800 mt-1">
+                        {selectedVessel.heading}°
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Position Section */}
+              <div className="bg-blue-50 border border-blue-200 rounded p-4">
+                <h3 className="font-bold text-gray-700 mb-3">Position</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase">
+                      Latitude
+                    </label>
+                    <p className="text-sm text-gray-800 mt-1 font-mono">
+                      {selectedVessel.lat.toFixed(8)}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase">
+                      Longitude
+                    </label>
+                    <p className="text-sm text-gray-800 mt-1 font-mono">
+                      {selectedVessel.lng.toFixed(8)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timestamps Section */}
+              <div className="bg-gray-50 border border-gray-200 rounded p-4">
+                <h3 className="font-bold text-gray-700 mb-3">Timestamps</h3>
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="font-semibold text-gray-500 uppercase">
+                      Created
+                    </label>
+                    <p className="text-gray-700 mt-1">
+                      {new Date(selectedVessel.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="font-semibold text-gray-500 uppercase">
+                      Updated
+                    </label>
+                    <p className="text-gray-700 mt-1">
+                      {new Date(selectedVessel.updated_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-4 border-t">
+                <button
+                  onClick={() => deleteVessel(selectedVessel.id)}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-semibold transition"
+                >
+                  Delete Vessel
+                </button>
+                <button
+                  onClick={() => setSelectedVessel(null)}
+                  className="flex-1 bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded font-semibold transition"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
