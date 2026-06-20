@@ -83,35 +83,78 @@ const MapClickHandler = ({
   return null;
 };
 
-// 1. Create the Custom Heatmap Component
-const HeatmapLayer = ({ points }) => {
-  const map = useMap(); // Access the underlying Leaflet map instance
+// Custom Heatmap Layer — viewport-bounded, recycle-view style
+const HeatmapLayer = () => {
+  const map = useMap();
+  const heatLayerRef = useRef(null);
+
+  const getHeatmapOptions = (zoom) => {
+    // Increase radius to ensure points overlap and blend smoothly across zoom levels
+    if (zoom <= 6)  return { radius: 35, blur: 25, max: 1.0, minOpacity: 0.2 };
+    if (zoom <= 8)  return { radius: 40, blur: 30, max: 1.0, minOpacity: 0.2 };
+    if (zoom <= 10) return { radius: 45, blur: 32, max: 1.0, minOpacity: 0.25 };
+    if (zoom <= 12) return { radius: 50, blur: 35, max: 1.0, minOpacity: 0.3 };
+    return              { radius: 60, blur: 40, max: 1.0, minOpacity: 0.3 };
+  };
+
+  const gradient = {
+    0.0: "red",        // Shallowest: Warm Red
+    0.25: "orange",    // Shallow-medium: Warm Orange
+    0.5: "yellow",     // Medium: Warm Yellow
+    0.7: "cyan",       // Medium-deep: Cool Cyan
+    0.85: "blue",      // Deep: Cool Blue
+    1.0: "navy",       // Deepest: Cool Navy
+  };
 
   useEffect(() => {
-    if (!points || points.length === 0) return;
+    let isMounted = true;
 
-    // Initialize the heat layer
-    const heatLayer = L.heatLayer(points, {
-      radius: 35,
-      blur: 25,
-      maxZoom: 13,
-      // Custom gradient: 0.0 is shallow (warm), 1.0 is deep (cool)
-      gradient: {
-        0.2: "red",     // Shallow
-        0.4: "orange",  // Medium-shallow
-        0.6: "yellow",  // Medium
-        0.8: "blue",    // Deep
-        1.0: "navy",    // Trench/very deep
-      },
-    }).addTo(map);
+    const refresh = async () => {
+      const bounds = map.getBounds();
+      const minLat = bounds.getSouth();
+      const maxLat = bounds.getNorth();
+      const minLng = bounds.getWest();
+      const maxLng = bounds.getEast();
+      const zoom   = map.getZoom();
 
-    // Cleanup: remove the layer when the component unmounts or data changes
-    return () => {
-      map.removeLayer(heatLayer);
+      try {
+        const pts = await depthAPI.getHeatmapData(minLat, maxLat, minLng, maxLng);
+        if (!isMounted) return;
+
+        const opts = { ...getHeatmapOptions(zoom), gradient };
+
+        if (heatLayerRef.current) {
+          // Reuse the existing canvas — just swap data and options
+          heatLayerRef.current.setLatLngs(pts);
+          heatLayerRef.current.setOptions(opts);
+          heatLayerRef.current.redraw();
+        } else {
+          heatLayerRef.current = L.heatLayer(pts, opts).addTo(map);
+        }
+      } catch (err) {
+        console.error("Depth heatmap fetch error:", err);
+      }
     };
-  }, [map, points]);
 
-  return null; // This component doesn't render HTML, it mutates the map
+    // Initial render
+    refresh();
+
+    // Re-render whenever the user stops moving or zooming
+    map.on("moveend", refresh);
+    map.on("zoomend", refresh);
+
+    return () => {
+      isMounted = false;
+      map.off("moveend", refresh);
+      map.off("zoomend", refresh);
+      if (heatLayerRef.current) {
+        map.removeLayer(heatLayerRef.current);
+        heatLayerRef.current = null;
+      }
+    };
+  }, [map]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null;
 };
 
 const VesselMap = () => {
@@ -140,7 +183,6 @@ const VesselMap = () => {
 
   // Heatmap state
   const [showHeatmap, setShowHeatmap] = useState(false);
-  const [heatmapPoints, setHeatmapPoints] = useState([]);
 
   const mapRef = useRef();
   const boatsIntervalRef = useRef(null);
@@ -191,20 +233,7 @@ const VesselMap = () => {
     };
   }, []);
 
-  // Fetch depth heatmap data when showHeatmap is toggled
-  useEffect(() => {
-    if (showHeatmap && heatmapPoints.length === 0) {
-      const fetchHeatmapData = async () => {
-        try {
-          const points = await depthAPI.getHeatmapData();
-          setHeatmapPoints(points);
-        } catch (err) {
-          console.error("Failed to fetch depth heatmap data:", err);
-        }
-      };
-      fetchHeatmapData();
-    }
-  }, [showHeatmap, heatmapPoints]);
+
 
   // Fetch boats from server
   const fetchBoats = async () => {
@@ -810,8 +839,8 @@ const VesselMap = () => {
             />
 
             {/* Seafloor depth heatmap layer */}
-            {showHeatmap && heatmapPoints.length > 0 && (
-              <HeatmapLayer points={heatmapPoints} />
+            {showHeatmap && (
+              <HeatmapLayer />
             )}
 
             {/* Geofence Polygons */}

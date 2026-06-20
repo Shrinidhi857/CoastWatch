@@ -431,12 +431,18 @@ export const systemAPI = {
 // =============================================
 
 export const depthAPI = {
-  /**
-   * Get depth heatmap data
-   */
-  getHeatmapData: async () => {
+  getHeatmapData: async (minLat, maxLat, minLng, maxLng) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/depth-heatmap`, {
+      let url = `${API_BASE_URL}/depth-heatmap`;
+      if (
+        minLat !== undefined &&
+        maxLat !== undefined &&
+        minLng !== undefined &&
+        maxLng !== undefined
+      ) {
+        url += `?min_lat=${minLat}&max_lat=${maxLat}&min_lng=${minLng}&max_lng=${maxLng}`;
+      }
+      const response = await fetch(url, {
         method: "GET",
         headers: apiHeaders,
       });
