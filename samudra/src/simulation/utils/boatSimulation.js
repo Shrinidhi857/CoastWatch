@@ -318,17 +318,18 @@ export const stopBoatMovement = (boatState) => {
  * Get boat marker icon based on state
  * @param {Object} boatState - Current boat state
  * @returns {Object} Leaflet icon configuration
+ * Blue icon = safe / regular area; Red icon = restricted zone entry
  */
 export const getBoatIcon = (boatState) => {
   const iconUrl = boatState.inRestrictedZone
-    ? "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDMyIDMyIj48cGF0aCBkPSJNMTYgMkw0IDEwdjE2aDAuNXYyaDA3djIuNWgxdjIuNWg3di0yLjVoMXYtMmgwLjVWMTB6IiBmaWxsPSIjZGMyNjI2IiBzdHJva2U9IiM5OTAxMDEiIHN0cm9rZS13aWR0aD0iMC41Ii8+PC9zdmc+" // Red
-    : "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDMyIDMyIj48cGF0aCBkPSJNMTYgMkw0IDEwdjE2aDAuNXYyaDA3djIuNWgxdjIuNWg3di0yLjVoMXYtMmgwLjVWMTB6IiBmaWxsPSIjMjc3NGQ5IiBzdHJva2U9IiMxYTQzYjAiIHN0cm9rZS13aWR0aD0iMC41Ii8+PC9zdmc+"; // Blue
+    ? `${process.env.PUBLIC_URL}/assets/boat-red.png`
+    : `${process.env.PUBLIC_URL}/assets/boat-blue.png`;
 
   return L.icon({
     iconUrl: iconUrl,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -40],
     className: boatState.inRestrictedZone ? "boat-marker-alert" : "boat-marker",
   });
 };
