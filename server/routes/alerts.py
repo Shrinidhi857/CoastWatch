@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify
-from shapely.geometry import Point
 from firebase_init import get_rtdb_ref
-from routes.geofence_check import _get_all_active_geofence_polygons
+from routes.geofence_check import _get_cached_records
+from geofence_engine import pip_ray_cast
 
 alerts_bp = Blueprint('alerts', __name__, url_prefix='/api/alerts')
 
@@ -13,7 +13,7 @@ def get_alerts():
     """
     try:
         boats_data = get_rtdb_ref('boats_live').get() or {}
-        geofences = _get_all_active_geofence_polygons()
+        geofences = _get_cached_records()
         alerts = []
 
         for boat_id, boat_raw in boats_data.items():
@@ -28,10 +28,9 @@ def get_alerts():
             if not gps.get('fix', False):
                 continue
 
-            boat_point = Point(lng, lat)
             in_violation = any(
-                gf['type'] == 'restricted' and gf['polygon'].contains(boat_point)
-                for gf in geofences.values()
+                rec.gf_type == 'restricted' and pip_ray_cast(lng, lat, rec)
+                for rec in geofences.values()
             )
 
             if in_violation:
@@ -64,17 +63,16 @@ def get_boat_alerts(boat_id):
         gps = boat_raw.get('gps', {})
         lat = float(gps.get('latitude', 0))
         lng = float(gps.get('longitude', 0))
-        boat_point = Point(lng, lat)
 
-        geofences = _get_all_active_geofence_polygons()
+        geofences = _get_cached_records()
         violations = [
             {
                 'geofence_id': gf_id,
-                'geofence_name': gf['name'],
+                'geofence_name': rec.name,
                 'alert_type': 'GEOFENCE_VIOLATION'
             }
-            for gf_id, gf in geofences.items()
-            if gf['type'] == 'restricted' and gf['polygon'].contains(boat_point)
+            for gf_id, rec in geofences.items()
+            if rec.gf_type == 'restricted' and pip_ray_cast(lng, lat, rec)
         ]
 
         boat_name = boat_raw.get('boat_metadata', {}).get('boat_name', boat_id)
