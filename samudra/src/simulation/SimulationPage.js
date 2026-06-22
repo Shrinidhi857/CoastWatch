@@ -10,7 +10,7 @@ import {
 import "leaflet/dist/leaflet.css";
 import { geofencesAPI } from "../dashboard/routes/dashboardRoutes";
 import { formatGeofenceFromServer, coordsToLeaflet } from "../utils/helpers";
-import { MAP_CONFIG, SIMULATION_CONFIG } from "../config/config";
+import { MAP_CONFIG, SIMULATION_CONFIG, API_CONFIG } from "../config/config";
 import {
   initializeBoat,
   updateBoatPosition,
@@ -43,6 +43,7 @@ const SimulationPage = () => {
   const simulationIntervalRef = useRef(null);
   const alertManagerRef = useRef(new AlertManager());
   const restrictedZoneEnteredRef = useRef(false);
+  const backendRestrictedZoneEnteredRef = useRef(false);
 
   // Fetch geofences to display on the map for reference
   useEffect(() => {
@@ -66,8 +67,11 @@ const SimulationPage = () => {
   /**
    * Initialize boat simulation
    */
-  const initializeSimulation = () => {
-    const path = REAL_WORLD_PATH;
+  const initializeSimulation = (pathKey = selectedPath) => {
+    const path =
+      pathKey === "harbor_tour"
+        ? REAL_WORLD_PATH
+        : SIMULATION_CONFIG.PREDEFINED_PATHS[pathKey] || REAL_WORLD_PATH;
     const startPosition = path[0];
 
     const newBoatState = initializeBoat("sim-boat-1", startPosition, path);
@@ -76,6 +80,7 @@ const SimulationPage = () => {
     setBoatTrail([startPosition]);
     setSimulationAlerts([]);
     restrictedZoneEnteredRef.current = false;
+    backendRestrictedZoneEnteredRef.current = false;
 
     const initAlert = createAlert(
       ALERT_TYPES.INFO,
@@ -137,6 +142,7 @@ const SimulationPage = () => {
     setBoatTrail([]);
     setSimulationAlerts([]);
     restrictedZoneEnteredRef.current = false;
+    backendRestrictedZoneEnteredRef.current = false;
 
     const resetAlert = createAlert(
       ALERT_TYPES.INFO,
@@ -179,7 +185,37 @@ const SimulationPage = () => {
                 monitoringZones: res.monitoringZones,
               };
             });
-          }
+
+            // Trigger alerts for backend geofence violations
+            if (res.inAnyRestrictedZone) {
+              if (!backendRestrictedZoneEnteredRef.current) {
+                backendRestrictedZoneEnteredRef.current = true;
+                const zoneNames =
+                  res.violations && res.violations.length > 0
+                    ? `: ${res.violations.map((v) => v.name).join(", ")}`
+                    : "";
+                const alert = createAlert(
+                  ALERT_TYPES.DANGER,
+                  `🚨 Backend Alert: Boat entered restricted zone${zoneNames}!`,
+                  "boat_sim"
+                );
+                setSimulationAlerts((prev) => [...prev, alert]);
+                alertManagerRef.current.addAlert(alert);
+              }
+            } else {
+              if (backendRestrictedZoneEnteredRef.current) {
+                backendRestrictedZoneEnteredRef.current = false;
+                const alert = createAlert(
+                  ALERT_TYPES.INFO,
+                  "✓ Boat has exited backend restricted zone.",
+                  "boat_sim"
+                );
+                setSimulationAlerts((prev) => [...prev, alert]);
+                alertManagerRef.current.addAlert(alert);
+              }
+            }
+          },
+          API_CONFIG.BASE_URL
         );
 
         // Update trail path
@@ -266,8 +302,9 @@ const SimulationPage = () => {
             <select
               value={selectedPath}
               onChange={(e) => {
-                setSelectedPath(e.target.value);
-                if (!simulationActive) initializeSimulation();
+                const pathKey = e.target.value;
+                setSelectedPath(pathKey);
+                if (!simulationActive) initializeSimulation(pathKey);
               }}
               disabled={simulationActive}
               className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-semibold text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"

@@ -31,7 +31,16 @@ import L from "leaflet";
  */
 export const checkGeofenceWithBackend = async (lat, lng, baseUrl = "") => {
   try {
-    const response = await fetch(`${baseUrl}/api/geofence-check/location`, {
+    let url;
+    if (baseUrl) {
+      const cleanBase = baseUrl.endsWith("/api") ? baseUrl : `${baseUrl}/api`;
+      url = `${cleanBase}/geofence-check/location`;
+    } else {
+      const defaultBase =
+        process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+      url = `${defaultBase}/geofence-check/location`;
+    }
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ latitude: lat, longitude: lng }),
