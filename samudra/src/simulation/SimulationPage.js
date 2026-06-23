@@ -272,82 +272,74 @@ const SimulationPage = () => {
   }, [simulationActive, boatState]);
 
   return (
-    <div className="w-full h-full flex flex-col flex-1">
+    <div className="w-full h-full flex flex-col flex-1" style={{ background: "var(--navy-950)" }}>
       {/* Loading Reference Info Banner */}
       {loading && (
-        <div className="bg-purple-900/40 text-purple-200 px-4 py-2 text-center text-xs border-b border-purple-800/40">
-          Syncing geofence layers from Firestore for reference...
+        <div className="animate-fade-in px-5 py-2 text-center text-[12px] font-medium" style={{ background: "rgba(124,58,237,0.08)", borderBottom: "1px solid rgba(124,58,237,0.18)", color: "#c4b5fd" }}>
+          Syncing geofence layers from Firestore…
         </div>
       )}
 
       {/* Error Reference Info Banner */}
       {error && (
-        <div className="bg-red-950/40 text-red-400 px-4 py-2 text-center text-xs border-b border-red-900/40">
-          ⚠️ {error}
+        <div className="animate-fade-in px-5 py-2 text-center text-[12px] font-medium" style={{ background: "rgba(239,68,68,0.08)", borderBottom: "1px solid rgba(239,68,68,0.2)", color: "#fca5a5" }}>
+          {error}
         </div>
       )}
 
       {/* Control Panel Header */}
-      <div className="bg-slate-900 border-b border-slate-800 text-white p-4 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div
+        className="px-5 py-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0"
+        style={{ background: "var(--navy-900)", borderBottom: "1px solid var(--glass-border)" }}
+      >
         <div>
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <span>🚤</span> Boat Simulation Control Center
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Test and validate PIP precision and real-time geofence warning triggers.
-          </p>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "0.01em" }}>Boat Simulation Control Center</h2>
+          <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>Test and validate PIP precision and real-time geofence warning triggers.</p>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="flex gap-2">
-            <select
-              value={selectedPath}
-              onChange={(e) => {
-                const pathKey = e.target.value;
-                setSelectedPath(pathKey);
-                if (!simulationActive) initializeSimulation(pathKey);
-              }}
-              disabled={simulationActive}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-semibold text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
-            >
-              <option value="harbor_tour">🏖️ Harbor Tour</option>
-              <option value="coastal_patrol">🚢 Coastal Patrol</option>
-              <option value="restricted_zone_approach">⚠️ Restricted Zone Approach</option>
-            </select>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <select
+            value={selectedPath}
+            onChange={(e) => {
+              const pathKey = e.target.value;
+              setSelectedPath(pathKey);
+              if (!simulationActive) initializeSimulation(pathKey);
+            }}
+            disabled={simulationActive}
+            className="rounded-lg px-3 py-2 text-[12px] font-medium focus:outline-none"
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--glass-border)", color: "var(--text-secondary)", minWidth: 180 }}
+          >
+            <option value="harbor_tour">Harbor Tour</option>
+            <option value="coastal_patrol">Coastal Patrol</option>
+            <option value="restricted_zone_approach">Restricted Zone Approach</option>
+          </select>
 
-            {!simulationActive ? (
-              <>
-                <button
-                  onClick={() => {
-                    if (!boatState) initializeSimulation();
-                    startSimulation();
-                  }}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg shadow-md shadow-green-600/20 transition"
-                >
-                  ▶ Start
-                </button>
-                <button
-                  onClick={resetSimulation}
-                  className="px-4 py-2 bg-slate-850 hover:bg-slate-750 border border-slate-700 text-slate-300 text-xs font-bold rounded-lg transition"
-                >
-                  ↻ Reset
-                </button>
-              </>
-            ) : (
+          {!simulationActive ? (
+            <>
               <button
-                onClick={stopSimulation}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow-md shadow-red-600/20 transition"
+                onClick={() => { if (!boatState) initializeSimulation(); startSimulation(); }}
+                className="pro-btn-primary"
+                style={{ background: "linear-gradient(135deg,#166534,#16a34a)", boxShadow: "0 2px 12px rgba(22,163,74,0.25)", border: "1px solid rgba(34,197,94,0.2)" }}
               >
-                ⏹ Stop
+                ▶ Start
               </button>
-            )}
-          </div>
+              <button onClick={resetSimulation} className="pro-btn-ghost">↻ Reset</button>
+            </>
+          ) : (
+            <button
+              onClick={stopSimulation}
+              className="pro-btn-ghost"
+              style={{ color: "#fca5a5", borderColor: "rgba(239,68,68,0.25)" }}
+            >
+              ⏹ Stop
+            </button>
+          )}
         </div>
       </div>
 
       {/* Main Simulation Layout */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-4 p-4 bg-slate-950 min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 p-4 min-h-0" style={{ background: "var(--navy-950)" }}>
         {/* Map visualization */}
-        <div className="flex-1 relative h-[50vh] lg:h-auto rounded-xl overflow-hidden border border-slate-800 shadow-xl">
+        <div className="flex-1 relative h-[50vh] lg:h-auto rounded-xl overflow-hidden shadow-2xl" style={{ border: "1px solid var(--glass-border)" }}>
           <MapContainer
             center={MAP_CONFIG.DEFAULT_CENTER}
             zoom={MAP_CONFIG.DEFAULT_ZOOM}
@@ -418,100 +410,65 @@ const SimulationPage = () => {
         </div>
 
         {/* Sidebar panels */}
-        <div className="w-full lg:w-96 flex flex-col gap-4 overflow-y-auto lg:max-h-full">
+        <div className="w-full lg:w-80 flex flex-col gap-3 overflow-y-auto lg:max-h-full">
           {/* Telemetry panel */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg p-4">
-            <h3 className="font-bold text-white text-sm mb-3 pb-2 border-b border-slate-800">
-              📊 Live Telemetry
-            </h3>
+          <div className="glass-card rounded-xl overflow-hidden">
+            <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--glass-border)", background: "rgba(14,31,61,0.6)" }}>
+              <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>Live Telemetry</span>
+            </div>
+            <div className="p-4">
             {boatState ? (
-              <div className="space-y-3 text-xs">
-                <div className="flex justify-between items-center py-1 border-b border-slate-800/40">
-                  <span className="text-slate-400">Simulation Status</span>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      simulationActive
-                        ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                        : "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
-                    }`}
-                  >
-                    {simulationActive ? "Running" : "Paused"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-slate-800/40">
-                  <span className="text-slate-400">Vessel Latitude</span>
-                  <span className="font-mono text-slate-200">{boatState.position[0].toFixed(6)}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-slate-800/40">
-                  <span className="text-slate-400">Vessel Longitude</span>
-                  <span className="font-mono text-slate-200">{boatState.position[1].toFixed(6)}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-slate-800/40">
-                  <span className="text-slate-400">Heading Angle</span>
-                  <span className="text-slate-200 font-semibold">{boatState.heading.toFixed(0)}°</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-slate-800/40">
-                  <span className="text-slate-400">Geofencing Warning</span>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                      boatState.inRestrictedZone
-                        ? "bg-red-500/15 text-red-400 border border-red-500/20"
-                        : "bg-slate-800 text-slate-400 border border-slate-700"
-                    }`}
-                  >
-                    {boatState.inRestrictedZone ? "Breach Detected" : "Clear"}
-                  </span>
-                </div>
+              <div className="space-y-2.5 text-[12px]">
+                {[
+                  ["Simulation Status", <span key="status" className="text-[10px] font-semibold px-2 py-0.5 rounded" style={simulationActive ? { background: "rgba(34,197,94,0.1)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.2)" } : { background: "rgba(234,179,8,0.1)", color: "#facc15", border: "1px solid rgba(234,179,8,0.2)" }}>{simulationActive ? "Running" : "Paused"}</span>],
+                  ["Latitude", <span key="lat" className="font-mono text-[11px]" style={{ color: "var(--text-secondary)" }}>{boatState.position[0].toFixed(6)}</span>],
+                  ["Longitude", <span key="lng" className="font-mono text-[11px]" style={{ color: "var(--text-secondary)" }}>{boatState.position[1].toFixed(6)}</span>],
+                  ["Heading", <span key="hdg" className="font-medium" style={{ color: "var(--text-primary)" }}>{boatState.heading.toFixed(0)}&deg;</span>],
+                  ["Geofence Status", <span key="geo" className="text-[10px] font-semibold px-2 py-0.5 rounded uppercase" style={boatState.inRestrictedZone ? { background: "rgba(239,68,68,0.12)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.2)" } : { background: "rgba(255,255,255,0.04)", color: "var(--text-muted)", border: "1px solid var(--glass-border)" }}>{boatState.inRestrictedZone ? "Breach" : "Clear"}</span>],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="flex justify-between items-center py-1.5" style={{ borderBottom: "1px solid var(--glass-border)" }}>
+                    <span style={{ color: "var(--text-muted)" }}>{label}</span>
+                    {value}
+                  </div>
+                ))}
                 {boatState.inAnyRestrictedZone && boatState.violations.length > 0 && (
-                  <div className="bg-red-950/20 border border-red-900/50 p-2.5 rounded-lg text-[10px] text-red-400">
-                    <p className="font-bold uppercase tracking-wider mb-1">Backend Violations:</p>
-                    <ul className="list-disc list-inside">
-                      {boatState.violations.map((violation, i) => (
-                        <li key={i} className="opacity-90">{violation.name} ({violation.type})</li>
-                      ))}
+                  <div className="p-2.5 rounded-lg text-[11px] mt-1" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.18)", color: "#fca5a5" }}>
+                    <p className="font-semibold uppercase tracking-wider text-[10px] mb-1">Backend Violations:</p>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      {boatState.violations.map((v, i) => <li key={i}>{v.name} ({v.type})</li>)}
                     </ul>
                   </div>
                 )}
               </div>
             ) : (
-              <p className="text-xs text-slate-500 py-6 text-center">
-                Simulation not initialized. Click "Start" to deploy the test boat.
-              </p>
+              <p className="text-[12px] py-8 text-center" style={{ color: "var(--text-muted)" }}>Simulation not initialized. Click Start to deploy the test vessel.</p>
             )}
+            </div>
           </div>
 
           {/* Simulation Alerts Logger */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg flex-1 flex flex-col">
-            <div className="bg-slate-950 border-b border-slate-800 p-4 font-bold text-white flex justify-between items-center">
-              <span>🔔 System Alerts</span>
-              <span className="text-xs bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded-full font-semibold">
-                {simulationAlerts.length} Logs
-              </span>
+          <div className="glass-card rounded-xl overflow-hidden flex-1 flex flex-col">
+            <div className="px-4 py-3 flex justify-between items-center" style={{ borderBottom: "1px solid var(--glass-border)", background: "rgba(14,31,61,0.6)" }}>
+              <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>System Alerts</span>
+              <span className="pro-badge">{simulationAlerts.length} Logs</span>
             </div>
-            <div className="overflow-y-auto max-h-[300px] lg:max-h-[320px] p-3 space-y-2 flex-1">
+            <div className="overflow-y-auto max-h-[280px] lg:max-h-[320px] p-3 space-y-1.5 flex-1">
               {simulationAlerts.length === 0 ? (
-                <p className="text-xs text-slate-550 text-center py-12">
-                  Logs is empty. Deploy simulation to generate telemetry alerts.
-                </p>
+                <p className="text-[12px] text-center py-10" style={{ color: "var(--text-muted)" }}>Deploy simulation to generate telemetry alerts.</p>
               ) : (
                 simulationAlerts.map((alert) => (
                   <div
                     key={alert.id}
-                    className={`text-xs p-2.5 rounded-lg border-l-4 ${
-                      alert.type === "danger"
-                        ? "bg-red-950/15 border-red-500 text-red-400"
-                        : alert.type === "warning"
-                          ? "bg-amber-950/15 border-amber-500 text-amber-400"
-                          : alert.type === "success"
-                            ? "bg-green-950/15 border-green-500 text-green-400"
-                            : "bg-blue-950/15 border-blue-500 text-blue-400"
-                    }`}
+                    className="text-[11px] px-3 py-2.5 rounded-lg border-l-2"
+                    style={{
+                      background: alert.type === "danger" ? "rgba(239,68,68,0.07)" : alert.type === "warning" ? "rgba(234,179,8,0.07)" : alert.type === "success" ? "rgba(34,197,94,0.07)" : "rgba(37,99,235,0.07)",
+                      borderLeftColor: alert.type === "danger" ? "#ef4444" : alert.type === "warning" ? "#f59e0b" : alert.type === "success" ? "#22c55e" : "#3b82f6",
+                      color: alert.type === "danger" ? "#fca5a5" : alert.type === "warning" ? "#fcd34d" : alert.type === "success" ? "#86efac" : "#93bbfd",
+                    }}
                   >
-                    <div className="flex justify-between items-start gap-1">
-                      <p className="font-semibold leading-relaxed">{alert.message}</p>
-                      <span className="text-[9px] opacity-60 shrink-0 mt-0.5">
-                        {alert.timestamp.toLocaleTimeString()}
-                      </span>
+                    <div className="flex justify-between items-start gap-2">
+                      <p className="font-medium leading-snug">{alert.message}</p>
+                      <span className="text-[9px] opacity-50 shrink-0 mt-0.5">{alert.timestamp.toLocaleTimeString()}</span>
                     </div>
                   </div>
                 ))

@@ -343,89 +343,74 @@ const DashboardPage = () => {
   };
 
   return (
-    <div className="w-full h-full flex flex-col flex-1">
+    <div className="w-full h-full flex flex-col flex-1" style={{ background: "var(--navy-950)" }}>
       {/* Server Connection Status */}
       {!serverConnected && (
-        <div className="bg-red-600 text-white px-4 py-3 text-center">
-          <p className="font-bold">⚠️ Server Connection Error</p>
-          <p className="text-sm">{error}</p>
+        <div className="animate-fade-in px-5 py-2.5 text-center text-sm font-medium" style={{ background: "rgba(239,68,68,0.12)", borderBottom: "1px solid rgba(239,68,68,0.25)", color: "#fca5a5" }}>
+          <span className="font-bold">Server Connection Error</span> — {error}
         </div>
       )}
 
       {/* Loading Indicator */}
       {loading && (
-        <div className="bg-blue-600 text-white px-4 py-3 text-center">
-          <p className="font-bold">Loading data from server...</p>
+        <div className="animate-fade-in px-5 py-2.5 text-center text-sm font-medium" style={{ background: "rgba(37,99,235,0.10)", borderBottom: "1px solid rgba(37,99,235,0.2)", color: "#93bbfd" }}>
+          Connecting to server and loading vessel data…
         </div>
       )}
 
-      {/* Header controls inside page */}
-      <div className="bg-slate-900 border-b border-slate-800 text-white p-4 shadow-lg flex justify-between items-center">
+      {/* Sub-header toolbar */}
+      <div
+        className="px-5 py-3 flex justify-between items-center shrink-0"
+        style={{ background: "var(--navy-900)", borderBottom: "1px solid var(--glass-border)" }}
+      >
         <div>
-          <h2 className="text-xl font-bold">Vessel Monitoring Dashboard</h2>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "0.01em" }}>Vessel Monitoring Dashboard</h2>
           {serverConnected && (
-            <p className="text-xs text-green-400 mt-0.5">
-              ● Connected to Flask Server
-            </p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="status-dot online"></span>
+              <span className="text-[11px]" style={{ color: "#4ade80" }}>Connected to Flask Server</span>
+            </div>
           )}
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowHeatmap(!showHeatmap)}
-            className={`px-4 py-2 rounded font-semibold text-sm transition ${
-              showHeatmap
-                ? "bg-teal-600 hover:bg-teal-700 text-white shadow-md shadow-teal-600/20"
-                : "bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300"
-            }`}
+            className={showHeatmap ? "pro-btn-primary" : "pro-btn-ghost"}
+            style={showHeatmap ? { background: "linear-gradient(135deg,#0f766e,#14b8a6)", boxShadow: "0 2px 12px rgba(20,184,166,0.25)" } : {}}
           >
             {showHeatmap ? "Hide" : "Show"} Depth Heatmap
           </button>
           <button
             onClick={() => {
-              if (!drawMode) {
-                setDrawMode(true);
-                setDrawnPolygon(null);
-              } else {
-                setDrawMode(false);
-                setDrawnPolygon(null);
-              }
+              if (!drawMode) { setDrawMode(true); setDrawnPolygon(null); }
+              else { setDrawMode(false); setDrawnPolygon(null); }
             }}
-            className={`px-4 py-2 rounded font-semibold text-sm transition ${
-              drawMode
-                ? "bg-red-500 hover:bg-red-600 text-white"
-                : "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20"
-            }`}
+            className={drawMode ? "pro-btn-ghost" : "pro-btn-primary"}
+            style={drawMode ? { color: "#fca5a5", borderColor: "rgba(239,68,68,0.25)" } : {}}
           >
-            {drawMode ? "Exit Draw Mode" : "Add Geofence"}
+            {drawMode ? "Exit Draw Mode" : "+ Add Geofence"}
           </button>
         </div>
       </div>
 
       {/* Drawing Instructions */}
       {drawMode && (
-        <div className="bg-blue-950/80 border-b border-blue-900/50 p-3 text-sm text-blue-200 px-6 flex justify-between items-center">
-          <p>
-            📍 Click on the map to add vertices. Complete the geofence once you have at least 3 points.
-          </p>
+        <div
+          className="animate-fade-in px-5 py-2.5 flex justify-between items-center text-sm"
+          style={{ background: "rgba(37,99,235,0.08)", borderBottom: "1px solid rgba(37,99,235,0.18)", color: "#93bbfd" }}
+        >
+          <p className="text-[12px] font-medium">Click on the map to add vertices. Need at least 3 points to complete a geofence.</p>
           {drawnPolygon && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0 ml-4">
               <button
                 onClick={completeGeofence}
                 disabled={drawnPolygon.length < 3}
-                className={`px-3 py-1.5 rounded text-xs font-semibold ${
-                  drawnPolygon.length >= 3
-                    ? "bg-green-600 hover:bg-green-700 text-white"
-                    : "bg-slate-700 text-slate-500 cursor-not-allowed"
-                }`}
+                className="pro-btn-primary text-[11px] py-1.5 px-3"
+                style={drawnPolygon.length < 3 ? { opacity: 0.45, cursor: "not-allowed" } : { background: "linear-gradient(135deg,#166534,#16a34a)" }}
               >
-                Complete Geofence ({drawnPolygon.length} pts)
+                Complete ({drawnPolygon.length} pts)
               </button>
-              <button
-                onClick={cancelDrawing}
-                className="px-3 py-1.5 rounded text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700"
-              >
-                Cancel
-              </button>
+              <button onClick={cancelDrawing} className="pro-btn-ghost text-[11px] py-1.5 px-3">Cancel</button>
             </div>
           )}
         </div>
@@ -433,34 +418,38 @@ const DashboardPage = () => {
 
       {/* Alerts Section */}
       {alerts.length > 0 && (
-        <div className="bg-red-950/40 border-b border-red-900/40 p-4 px-6">
-          <h3 className="text-red-400 font-bold mb-3 flex items-center gap-2">
-            <span>⚠️</span> Vessels in Restricted Zones ({alerts.length})
+        <div
+          className="animate-fade-in px-5 py-3"
+          style={{ background: "rgba(239,68,68,0.07)", borderBottom: "1px solid rgba(239,68,68,0.18)" }}
+        >
+          <h3 className="text-[11px] font-semibold uppercase tracking-widest mb-2.5 flex items-center gap-2" style={{ color: "#f87171" }}>
+            <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse-dot 1.5s infinite" }}></span>
+            Restricted Zone Violations — {alerts.length} Active
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
             {alerts.map((alert) => (
               <div
                 key={`${alert.boat_id}-alert`}
-                className="bg-slate-900/90 border border-red-900/50 p-3 rounded-lg shadow-md flex flex-col justify-between"
+                className="p-3 rounded-xl flex flex-col justify-between"
+                style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}
               >
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <p className="font-bold text-red-400">{alert.boat_name}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Lat: {alert.location.latitude.toFixed(5)}, Lng: {alert.location.longitude.toFixed(5)}
+                    <p className="font-semibold text-[13px]" style={{ color: "#fca5a5" }}>{alert.boat_name}</p>
+                    <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                      {alert.location.latitude.toFixed(5)}, {alert.location.longitude.toFixed(5)}
                     </p>
                   </div>
                   <span
-                    className={`px-2 py-0.5 text-white text-[10px] uppercase font-bold rounded ${
-                      alert.severity === "high" ? "bg-red-600" : "bg-orange-600"
-                    }`}
+                    className="text-[10px] uppercase font-bold px-2 py-0.5 rounded"
+                    style={{ background: alert.severity === "high" ? "rgba(239,68,68,0.25)" : "rgba(234,88,12,0.25)", color: alert.severity === "high" ? "#fca5a5" : "#fdba74" }}
                   >
                     {alert.severity}
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-xs text-slate-400 border-t border-slate-800/80 pt-2 mt-1">
-                  <p>Speed: <span className="text-slate-200 font-semibold">{alert.speed} km/h</span></p>
-                  <p className="text-[10px] text-slate-500">{alert.updated_at ? new Date(alert.updated_at).toLocaleTimeString() : ""}</p>
+                <div className="flex justify-between items-center text-[11px] pt-2 mt-1" style={{ borderTop: "1px solid rgba(239,68,68,0.15)", color: "var(--text-muted)" }}>
+                  <p>Speed: <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>{alert.speed} km/h</span></p>
+                  <p className="text-[10px]">{alert.updated_at ? new Date(alert.updated_at).toLocaleTimeString() : ""}</p>
                 </div>
               </div>
             ))}
@@ -469,9 +458,9 @@ const DashboardPage = () => {
       )}
 
       {/* Main content area */}
-      <div className="flex-1 flex gap-4 p-4 bg-slate-950 min-h-0">
+      <div className="flex-1 flex gap-4 p-4 min-h-0" style={{ background: "var(--navy-950)" }}>
         {/* Map Container */}
-        <div className="flex-1 relative h-full rounded-xl overflow-hidden border border-slate-800 shadow-xl">
+        <div className="flex-1 relative h-full rounded-xl overflow-hidden shadow-2xl" style={{ border: "1px solid var(--glass-border)" }}>
           <MapContainer
             center={MAP_CONFIG.DEFAULT_CENTER}
             zoom={MAP_CONFIG.DEFAULT_ZOOM}
@@ -669,71 +658,62 @@ const DashboardPage = () => {
         </div>
 
         {/* Sidebar */}
-        <div className="w-96 flex flex-col gap-4 max-h-full overflow-y-auto pr-1">
+        <div className="w-80 flex flex-col gap-3 max-h-full overflow-y-auto">
           {/* Vessels List */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg flex flex-col">
-            <div className="bg-blue-950/70 border-b border-blue-900/40 p-4 font-bold text-white flex justify-between items-center">
-              <span>Fleet Status</span>
-              <span className="text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-semibold">
-                {vessels.length} Active
-              </span>
+          <div className="glass-card rounded-xl overflow-hidden flex flex-col">
+            <div
+              className="px-4 py-3 flex justify-between items-center"
+              style={{ borderBottom: "1px solid var(--glass-border)", background: "rgba(30,53,102,0.4)" }}
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>Fleet Status</span>
+              <span className="pro-badge">{vessels.length} Active</span>
             </div>
-            <div className="overflow-y-auto max-h-[300px] divide-y divide-slate-800/60">
+            <div className="overflow-y-auto max-h-[290px] divide-y" style={{ borderColor: "var(--glass-border)" }}>
               {vessels.length === 0 ? (
-                <div className="p-6 text-slate-500 text-center text-sm">
-                  <p>No vessels available</p>
-                  <p className="text-xs mt-1 text-slate-600">
-                    Active vessels will appear here automatically.
-                  </p>
+                <div className="p-8 text-center text-[12px]" style={{ color: "var(--text-muted)" }}>
+                  <p>No active vessels</p>
+                  <p className="mt-1 text-[11px]">Vessels will appear automatically.</p>
                 </div>
               ) : (
                 vessels.map((vessel) => {
                   const inGeofence = vessel.in_restricted_zone || false;
-
                   return (
                     <div
                       key={vessel.id}
                       onClick={() => {
                         setSelectedVessel(vessel);
-                        if (mapRef.current) {
-                          mapRef.current.setView([vessel.lat, vessel.lng], 12);
-                        }
+                        if (mapRef.current) mapRef.current.setView([vessel.lat, vessel.lng], 12);
                       }}
-                      className={`p-4 hover:bg-slate-800/40 transition cursor-pointer flex justify-between items-start ${
-                        inGeofence ? "bg-red-950/20 border-l-4 border-l-red-500" : ""
-                      }`}
+                      className="px-4 py-3 flex justify-between items-start cursor-pointer transition-all"
+                      style={{
+                        background: inGeofence ? "rgba(239,68,68,0.06)" : "transparent",
+                        borderLeft: inGeofence ? "3px solid rgba(239,68,68,0.6)" : "3px solid transparent",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = inGeofence ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.03)"}
+                      onMouseLeave={e => e.currentTarget.style.background = inGeofence ? "rgba(239,68,68,0.06)" : "transparent"}
                     >
-                      <div className="space-y-1">
-                        <h4 className="font-bold text-slate-200 text-sm">
-                          {vessel.name}
-                        </h4>
-                        <p className="text-xs text-slate-400">
-                          {vessel.vessel_type} • {vessel.speed} kn • {vessel.heading}°
-                        </p>
-                        <p className="text-[10px] text-slate-500">
-                          {vessel.lat.toFixed(4)}, {vessel.lng.toFixed(4)}
-                        </p>
+                      <div className="space-y-0.5">
+                        <h4 className="font-semibold text-[13px]" style={{ color: "var(--text-primary)" }}>{vessel.name}</h4>
+                        <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{vessel.vessel_type} · {vessel.speed} kn · {vessel.heading}°</p>
+                        <p className="text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>{vessel.lat.toFixed(4)}, {vessel.lng.toFixed(4)}</p>
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         <span
-                          className={`px-2 py-0.5 text-[10px] font-bold rounded ${
-                            vessel.status === "Active"
-                              ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                              : "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
-                          }`}
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                          style={vessel.status === "Active"
+                            ? { background: "rgba(34,197,94,0.1)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.2)" }
+                            : { background: "rgba(234,179,8,0.1)", color: "#facc15", border: "1px solid rgba(234,179,8,0.2)" }}
                         >
                           {vessel.status}
                         </span>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteVessel(vessel.id);
-                          }}
-                          className="text-slate-500 hover:text-red-400 hover:bg-slate-800/80 px-1.5 py-0.5 rounded transition text-xs font-bold"
-                          title="Delete vessel"
-                        >
-                          ✕
-                        </button>
+                          onClick={e => { e.stopPropagation(); deleteVessel(vessel.id); }}
+                          className="text-[11px] font-semibold px-1.5 py-0.5 rounded transition"
+                          style={{ color: "var(--text-muted)" }}
+                          onMouseEnter={e => { e.currentTarget.style.color = "#fca5a5"; e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
+                          title="Remove vessel"
+                        >✕</button>
                       </div>
                     </div>
                   );
@@ -743,64 +723,60 @@ const DashboardPage = () => {
           </div>
 
           {/* Geofences List */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg flex flex-col">
-            <div className="bg-slate-950 border-b border-slate-800 p-4 font-bold text-white flex justify-between items-center">
-              <span>Geofences</span>
-              <span className="text-xs bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded-full font-semibold">
-                {geofences.length} Total
-              </span>
+          <div className="glass-card rounded-xl overflow-hidden flex flex-col">
+            <div
+              className="px-4 py-3 flex justify-between items-center"
+              style={{ borderBottom: "1px solid var(--glass-border)", background: "rgba(14,31,61,0.6)" }}
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>Geofence Zones</span>
+              <span className="pro-badge">{geofences.length} Total</span>
             </div>
-            <div className="overflow-y-auto max-h-[300px] divide-y divide-slate-800/60">
+            <div className="overflow-y-auto max-h-[290px] divide-y" style={{ borderColor: "var(--glass-border)" }}>
               {geofences.length === 0 ? (
-                <div className="p-6 text-slate-500 text-center text-sm">
-                  <p>No geofences set</p>
-                  <p className="text-xs mt-1 text-slate-600">
-                    Click "Add Geofence" to create one
-                  </p>
+                <div className="p-8 text-center text-[12px]" style={{ color: "var(--text-muted)" }}>
+                  <p>No geofences defined</p>
+                  <p className="mt-1 text-[11px]">Use "+ Add Geofence" above to create one.</p>
                 </div>
               ) : (
                 geofences.map((geofence) => (
                   <div
                     key={geofence.id}
-                    className="p-4 hover:bg-slate-800/40 transition flex justify-between items-start"
+                    className="px-4 py-3 flex justify-between items-start transition-all"
+                    style={{ background: "transparent" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.025)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                   >
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-slate-200 text-sm">
-                        {geofence.name}
-                      </h4>
-                      <p className="text-xs text-slate-400">
-                        Type:{" "}
+                    <div className="space-y-0.5">
+                      <h4 className="font-semibold text-[13px]" style={{ color: "var(--text-primary)" }}>{geofence.name}</h4>
+                      <div className="flex items-center gap-1.5 mt-1">
                         <span
-                          className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                            geofence.type === "restricted"
-                              ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                              : geofence.type === "safe_zone"
-                                ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                                : "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
-                          }`}
-                        >
-                          {geofence.type}
-                        </span>
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Vertices: {geofence.coordinates.length}
-                      </p>
+                          className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                          style={geofence.type === "restricted"
+                            ? { background: "rgba(239,68,68,0.12)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.2)" }
+                            : geofence.type === "safe_zone"
+                            ? { background: "rgba(34,197,94,0.1)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.2)" }
+                            : { background: "rgba(234,179,8,0.1)", color: "#facc15", border: "1px solid rgba(234,179,8,0.2)" }}
+                        >{geofence.type}</span>
+                        <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>{geofence.coordinates.length} pts</span>
+                      </div>
                     </div>
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-1">
                       <button
                         onClick={() => startEditingGeofence(geofence)}
-                        className="text-blue-400 hover:text-blue-300 hover:bg-blue-900/30 px-2 py-1 rounded transition text-xs font-bold"
-                        title="Edit geofence"
-                      >
-                        ✎
-                      </button>
+                        className="text-[11px] font-semibold px-2 py-1 rounded transition"
+                        style={{ color: "var(--text-secondary)" }}
+                        onMouseEnter={e => { e.currentTarget.style.color = "#93bbfd"; e.currentTarget.style.background = "rgba(37,99,235,0.1)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = "var(--text-secondary)"; e.currentTarget.style.background = "transparent"; }}
+                        title="Edit"
+                      >Edit</button>
                       <button
                         onClick={() => deleteGeofence(geofence.id)}
-                        className="text-red-400 hover:text-red-350 hover:bg-red-900/30 px-2 py-1 rounded transition text-xs font-bold"
-                        title="Delete geofence"
-                      >
-                        ✕
-                      </button>
+                        className="text-[11px] font-semibold px-2 py-1 rounded transition"
+                        style={{ color: "var(--text-muted)" }}
+                        onMouseEnter={e => { e.currentTarget.style.color = "#fca5a5"; e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
+                        title="Delete"
+                      >✕</button>
                     </div>
                   </div>
                 ))
@@ -812,191 +788,127 @@ const DashboardPage = () => {
 
       {/* Edit Geofence Modal */}
       {editMode && editingGeofence && editedCoordinates && (
-        <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-[9999] backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-11/12 max-w-xl overflow-hidden">
-            <div className="bg-slate-950 border-b border-slate-800 text-white p-4 px-6 font-bold flex justify-between items-center">
-              <span>Edit Geofence: {editingGeofence.name}</span>
-              <button
-                onClick={cancelEditGeofence}
-                className="text-lg font-bold text-slate-400 hover:text-white transition"
-              >
-                ✕
-              </button>
+        <div className="fixed inset-0 flex items-center justify-center z-[9999]" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}>
+          <div className="w-11/12 max-w-xl rounded-2xl overflow-hidden animate-fade-in" style={{ background: "var(--navy-900)", border: "1px solid var(--glass-border)", boxShadow: "0 24px 80px rgba(0,0,0,0.6)" }}>
+            <div className="px-6 py-4 flex justify-between items-center" style={{ borderBottom: "1px solid var(--glass-border)" }}>
+              <div>
+                <p className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: "var(--text-muted)" }}>Edit Zone</p>
+                <h3 className="font-semibold text-[15px] mt-0.5" style={{ color: "var(--text-primary)" }}>{editingGeofence.name}</h3>
+              </div>
+              <button onClick={cancelEditGeofence} className="pro-btn-ghost text-sm py-1 px-2.5">✕</button>
             </div>
 
             <div className="p-6 space-y-4">
-              <div className="bg-blue-950/20 border border-blue-900/40 rounded-xl p-4 text-xs text-blue-200">
-                <p className="font-semibold mb-1">💡 Instructions:</p>
-                <p className="opacity-80">
-                  You can click on the map to add new points. Click "Remove" next to any coordinates below to delete points. At least 3 points are required to save.
-                </p>
+              <div className="rounded-xl p-3.5 text-[12px]" style={{ background: "rgba(37,99,235,0.07)", border: "1px solid rgba(37,99,235,0.15)", color: "#93bbfd" }}>
+                Click on the map to add new vertices, or remove existing ones below. At least 3 points required.
               </div>
 
               <div>
-                <h4 className="font-semibold text-sm text-slate-350 mb-2">
-                  Coordinates List ({editedCoordinates.length} vertices):
-                </h4>
-                <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto border border-slate-800 rounded-xl p-3 bg-slate-950">
+                <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>Vertices — {editedCoordinates.length} pts</p>
+                <div className="space-y-1.5 max-h-[200px] overflow-y-auto p-3 rounded-xl" style={{ background: "rgba(0,0,0,0.25)", border: "1px solid var(--glass-border)" }}>
                   {editedCoordinates.map((coord, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between items-center bg-slate-900/80 p-2 px-3 rounded-lg border border-slate-800 text-xs"
-                    >
-                      <span className="font-mono text-slate-300">
-                        Pt {idx + 1}: [{coord[0].toFixed(5)}, {coord[1].toFixed(5)}]
-                      </span>
+                    <div key={idx} className="flex justify-between items-center px-3 py-2 rounded-lg" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border)" }}>
+                      <span className="text-[11px] font-mono" style={{ color: "var(--text-secondary)" }}>Pt {idx+1}: [{coord[0].toFixed(5)}, {coord[1].toFixed(5)}]</span>
                       <button
                         onClick={() => removeCoordinateFromEdit(idx)}
                         disabled={editedCoordinates.length <= 3}
-                        className={`px-2 py-1 rounded text-[10px] font-bold transition ${
-                          editedCoordinates.length <= 3
-                            ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                            : "bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                        }`}
-                      >
-                        Remove
-                      </button>
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded transition"
+                        style={editedCoordinates.length <= 3 ? { color: "var(--text-muted)", cursor: "not-allowed" } : { color: "#fca5a5", background: "rgba(239,68,68,0.08)" }}
+                      >Remove</button>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={saveGeofenceEdit}
-                  className="flex-1 bg-green-600 text-white font-semibold py-2.5 px-4 rounded-xl hover:bg-green-700 transition text-sm"
-                >
-                  ✓ Save Changes
-                </button>
-                <button
-                  onClick={cancelEditGeofence}
-                  className="flex-1 bg-slate-800 text-slate-300 font-semibold py-2.5 px-4 rounded-xl hover:bg-slate-700 transition text-sm"
-                >
-                  Cancel
-                </button>
+              <div className="flex gap-3 pt-1">
+                <button onClick={saveGeofenceEdit} className="flex-1 pro-btn-primary py-2.5" style={{ background: "linear-gradient(135deg,#166534,#16a34a)", boxShadow: "0 2px 12px rgba(22,163,74,0.25)" }}>Save Changes</button>
+                <button onClick={cancelEditGeofence} className="flex-1 pro-btn-ghost py-2.5">Cancel</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Boat Details Modal */}
+      {/* Vessel Details Modal */}
       {selectedVessel && (
-        <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-[9999] backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-11/12 max-w-xl overflow-hidden">
-            <div className="bg-slate-950 border-b border-slate-800 text-white p-4 px-6 font-bold flex justify-between items-center">
-              <span>⚓ Vessel Details: {selectedVessel.name}</span>
-              <button
-                onClick={() => setSelectedVessel(null)}
-                className="text-lg font-bold text-slate-400 hover:text-white transition"
-              >
-                ✕
-              </button>
+        <div className="fixed inset-0 flex items-center justify-center z-[9999]" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}>
+          <div className="w-11/12 max-w-xl rounded-2xl overflow-hidden animate-fade-in" style={{ background: "var(--navy-900)", border: "1px solid var(--glass-border)", boxShadow: "0 24px 80px rgba(0,0,0,0.6)" }}>
+            {/* Modal Header */}
+            <div className="px-6 py-4 flex items-start justify-between" style={{ borderBottom: "1px solid var(--glass-border)" }}>
+              <div>
+                <p className="text-[11px] uppercase tracking-widest font-semibold" style={{ color: "var(--text-muted)" }}>Vessel Details</p>
+                <h2 className="font-bold text-[17px] mt-0.5" style={{ color: "var(--text-primary)" }}>{selectedVessel.name}</h2>
+                <p className="text-[11px] mt-0.5 font-mono" style={{ color: "var(--text-muted)" }}>ID: {selectedVessel.id}</p>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <button onClick={() => setSelectedVessel(null)} className="pro-btn-ghost text-sm py-1 px-2.5">✕</button>
+                <span
+                  className="text-[10px] font-semibold px-2.5 py-1 rounded-full"
+                  style={selectedVessel.status === "Active"
+                    ? { background: "rgba(34,197,94,0.1)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.2)" }
+                    : { background: "rgba(234,179,8,0.1)", color: "#facc15", border: "1px solid rgba(234,179,8,0.2)" }}
+                >{selectedVessel.status}</span>
+                {selectedVessel.in_restricted_zone && (
+                  <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(239,68,68,0.12)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.2)" }}>⚠ Restricted Zone</span>
+                )}
+              </div>
             </div>
 
-            <div className="p-6 space-y-6 text-sm text-slate-300">
-              <div className="flex items-start justify-between border-b border-slate-800 pb-4">
-                <div>
-                  <h2 className="text-xl font-bold text-white">
-                    {selectedVessel.name}
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Database ID: {selectedVessel.id}
-                  </p>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span
-                    className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
-                      selectedVessel.status === "Active"
-                        ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                        : "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
-                    }`}
-                  >
-                    {selectedVessel.status}
-                  </span>
-                  {selectedVessel.in_restricted_zone && (
-                    <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-1 rounded-full text-xs font-bold">
-                      ⚠️ Restricted Zone
+            <div className="p-6 space-y-5">
+              {/* Info grid */}
+              <div className="grid grid-cols-2 gap-5">
+                <div className="space-y-4">
+                  <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--text-muted)" }}>Vessel Info</p>
+                  {[
+                    ["Type", selectedVessel.vessel_type],
+                    ["Crew", `${selectedVessel.crew_count} members`],
+                    ["Destination", selectedVessel.destination || "—"],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{label}</p>
+                      <p className="text-[13px] font-medium mt-0.5" style={{ color: "var(--text-primary)" }}>{value}</p>
                     </div>
-                  )}
+                  ))}
+                </div>
+                <div className="space-y-4">
+                  <p className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "var(--text-muted)" }}>Movement</p>
+                  {[
+                    ["Speed", `${selectedVessel.speed} knots`],
+                    ["Heading", `${selectedVessel.heading}°`],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{label}</p>
+                      <p className="text-[13px] font-medium mt-0.5" style={{ color: "var(--text-primary)" }}>{value}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <h3 className="font-bold text-white text-xs uppercase tracking-wider text-slate-400">Vessel Info</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-[10px] text-slate-500 uppercase font-semibold">
-                        Vessel Type
-                      </label>
-                      <p className="text-slate-200 mt-0.5">{selectedVessel.vessel_type}</p>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-500 uppercase font-semibold">
-                        Crew Count
-                      </label>
-                      <p className="text-slate-200 mt-0.5">{selectedVessel.crew_count} members</p>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-500 uppercase font-semibold">
-                        Destination
-                      </label>
-                      <p className="text-slate-200 mt-0.5">{selectedVessel.destination || "Not set"}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="font-bold text-white text-xs uppercase tracking-wider text-slate-400">Movement Data</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-[10px] text-slate-500 uppercase font-semibold">
-                        Speed
-                      </label>
-                      <p className="text-slate-200 mt-0.5">{selectedVessel.speed} knots</p>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-500 uppercase font-semibold">
-                        Heading
-                      </label>
-                      <p className="text-slate-200 mt-0.5">{selectedVessel.heading}°</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                <h3 className="font-bold text-white text-xs uppercase tracking-wider text-slate-400 mb-2">Coordinates</h3>
+              {/* Coordinates block */}
+              <div className="p-4 rounded-xl" style={{ background: "rgba(0,0,0,0.25)", border: "1px solid var(--glass-border)" }}>
+                <p className="text-[10px] uppercase tracking-wider mb-2.5 font-semibold" style={{ color: "var(--text-muted)" }}>Position</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] text-slate-500 uppercase font-semibold">
-                      Latitude
-                    </label>
-                    <p className="text-slate-200 mt-0.5 font-mono">{selectedVessel.lat.toFixed(6)}</p>
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Latitude</p>
+                    <p className="font-mono text-[13px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{selectedVessel.lat.toFixed(6)}</p>
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-500 uppercase font-semibold">
-                      Longitude
-                    </label>
-                    <p className="text-slate-200 mt-0.5 font-mono">{selectedVessel.lng.toFixed(6)}</p>
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Longitude</p>
+                    <p className="font-mono text-[13px] mt-0.5" style={{ color: "var(--text-secondary)" }}>{selectedVessel.lng.toFixed(6)}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-4 border-t border-slate-800">
+              {/* Actions */}
+              <div className="flex gap-3 pt-1" style={{ borderTop: "1px solid var(--glass-border)", paddingTop: "16px" }}>
                 <button
                   onClick={() => deleteVessel(selectedVessel.id)}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-xl font-semibold transition text-sm"
-                >
-                  Delete Vessel
-                </button>
-                <button
-                  onClick={() => setSelectedVessel(null)}
-                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-350 py-2 px-4 rounded-xl font-semibold transition text-sm"
-                >
-                  Close
-                </button>
+                  className="flex-1 pro-btn-ghost py-2.5"
+                  style={{ color: "#fca5a5", borderColor: "rgba(239,68,68,0.25)" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.1)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+                >Remove Vessel</button>
+                <button onClick={() => setSelectedVessel(null)} className="flex-1 pro-btn-primary py-2.5">Close</button>
               </div>
             </div>
           </div>
