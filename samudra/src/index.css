@@ -4,20 +4,23 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Design Tokens ────────────────────────────────────────── */
+/* ─── Design Tokens — Light Theme ──────────────────────────── */
 :root {
-  --navy-950: #050d1a;
-  --navy-900: #08152b;
-  --navy-800: #0e1f3d;
-  --navy-700: #162a52;
-  --navy-600: #1e3566;
-  --accent:   #2563eb;       /* professional blue */
+  /* Previously "navy" — now light greys / whites */
+  --navy-950: #f0f4f8;        /* page background */
+  --navy-900: #ffffff;        /* card / panel background */
+  --navy-800: #f7f9fc;        /* subtle surface */
+  --navy-700: #e8edf5;        /* divider-level surface */
+  --navy-600: #dce4f0;        /* border-level surface */
+
+  --accent:       #2563eb;    /* primary blue — unchanged */
   --accent-muted: #3b82f6;
-  --surface:  rgba(14, 31, 61, 0.65);
-  --glass-border: rgba(100, 148, 237, 0.12);
-  --text-primary: #e8edf5;
-  --text-secondary: #8b9cc8;
-  --text-muted: #4f617e;
+  --surface:      rgba(255, 255, 255, 0.80);
+  --glass-border: rgba(37, 99, 235, 0.12);
+
+  --text-primary:   #0f172a;  /* near-black */
+  --text-secondary: #334155;  /* slate-700 */
+  --text-muted:     #64748b;  /* slate-500 */
 }
 
 /* ─── Base Reset ───────────────────────────────────────────── */
@@ -31,38 +34,43 @@ body {
 
 /* ─── Glass / Frosted Components ──────────────────────────── */
 @layer components {
+  /* Top navigation bar */
   .glass-nav {
-    background: rgba(8, 21, 43, 0.72);
+    background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border-bottom: 1px solid var(--glass-border);
-    box-shadow: 0 1px 0 0 rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.45);
+    border-bottom: 1px solid rgba(37, 99, 235, 0.10);
+    box-shadow: 0 1px 0 0 rgba(255,255,255,0.8), 0 2px 16px rgba(0,0,0,0.06);
   }
 
+  /* Generic frosted panel */
   .glass-panel {
-    background: rgba(14, 31, 61, 0.55);
+    background: rgba(255, 255, 255, 0.75);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--glass-border);
   }
 
+  /* Sidebar card */
   .glass-card {
-    background: rgba(14, 31, 61, 0.80);
-    border: 1px solid rgba(100, 148, 237, 0.10);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 8px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02);
   }
 
+  /* Small badge (e.g. "SAMUDRA v2", "5 Active") */
   .pro-badge {
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.04em;
     padding: 2px 8px;
     border-radius: 4px;
-    background: rgba(37, 99, 235, 0.12);
-    color: #93bbfd;
-    border: 1px solid rgba(37, 99, 235, 0.25);
+    background: rgba(37, 99, 235, 0.08);
+    color: #1d4ed8;
+    border: 1px solid rgba(37, 99, 235, 0.18);
   }
 
+  /* Nav tab base */
   .nav-tab {
     padding: 6px 18px;
     border-radius: 6px;
@@ -76,23 +84,32 @@ body {
 
   .nav-tab:hover {
     color: var(--text-primary);
-    background: rgba(255,255,255,0.05);
+    background: rgba(37, 99, 235, 0.06);
   }
 
+  /* Active states */
   .nav-tab.active-dashboard {
-    background: rgba(37, 99, 235, 0.18);
-    color: #93bbfd;
-    border: 1px solid rgba(37, 99, 235, 0.28);
-    box-shadow: 0 0 12px rgba(37, 99, 235, 0.15);
+    background: rgba(37, 99, 235, 0.10);
+    color: #1d4ed8;
+    border: 1px solid rgba(37, 99, 235, 0.20);
+    box-shadow: 0 0 8px rgba(37, 99, 235, 0.10);
   }
 
   .nav-tab.active-simulation {
-    background: rgba(124, 58, 237, 0.18);
-    color: #c4b5fd;
-    border: 1px solid rgba(124, 58, 237, 0.28);
-    box-shadow: 0 0 12px rgba(124, 58, 237, 0.15);
+    background: rgba(124, 58, 237, 0.10);
+    color: #6d28d9;
+    border: 1px solid rgba(124, 58, 237, 0.20);
+    box-shadow: 0 0 8px rgba(124, 58, 237, 0.10);
   }
 
+  .nav-tab.active-history {
+    background: rgba(234, 179, 8, 0.12);
+    color: #92400e;
+    border: 1px solid rgba(234, 179, 8, 0.28);
+    box-shadow: 0 0 8px rgba(234, 179, 8, 0.10);
+  }
+
+  /* Primary button */
   .pro-btn-primary {
     background: linear-gradient(135deg, #1d4ed8, #2563eb);
     color: #fff;
@@ -101,35 +118,37 @@ body {
     letter-spacing: 0.03em;
     border-radius: 8px;
     padding: 8px 16px;
-    border: 1px solid rgba(96, 165, 250, 0.2);
-    box-shadow: 0 2px 12px rgba(37, 99, 235, 0.25), inset 0 1px 0 rgba(255,255,255,0.07);
+    border: 1px solid rgba(37, 99, 235, 0.30);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.20);
     transition: all 0.2s ease;
   }
 
   .pro-btn-primary:hover {
     background: linear-gradient(135deg, #1e40af, #1d4ed8);
-    box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4);
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
     transform: translateY(-1px);
   }
 
+  /* Ghost / outline button */
   .pro-btn-ghost {
-    background: rgba(255,255,255,0.04);
+    background: rgba(0, 0, 0, 0.03);
     color: var(--text-secondary);
     font-weight: 600;
     font-size: 12px;
     letter-spacing: 0.03em;
     border-radius: 8px;
     padding: 8px 16px;
-    border: 1px solid rgba(255,255,255,0.07);
+    border: 1px solid #e2e8f0;
     transition: all 0.2s ease;
   }
 
   .pro-btn-ghost:hover {
-    background: rgba(255,255,255,0.08);
+    background: rgba(0, 0, 0, 0.06);
     color: var(--text-primary);
-    border-color: rgba(255,255,255,0.12);
+    border-color: #cbd5e1;
   }
 
+  /* Online / offline status dot */
   .status-dot {
     width: 7px;
     height: 7px;
@@ -138,19 +157,19 @@ body {
   }
 
   .status-dot.online {
-    background: #22c55e;
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+    background: #16a34a;
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4);
   }
 
   .status-dot.offline {
-    background: #ef4444;
+    background: #dc2626;
   }
 }
 
 /* ─── Animations ───────────────────────────────────────────── */
 @keyframes pulse-dot {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
-  50%       { box-shadow: 0 0 0 5px rgba(34, 197, 94, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4); }
+  50%       { box-shadow: 0 0 0 5px rgba(22, 163, 74, 0); }
 }
 
 @keyframes fadeIn {
@@ -166,17 +185,22 @@ body {
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(100, 148, 237, 0.2);
+  background: rgba(37, 99, 235, 0.18);
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 148, 237, 0.4);
+  background: rgba(37, 99, 235, 0.35);
 }
 
 /* ─── Leaflet Map Tweaks ────────────────────────────────────── */
 .leaflet-container { font-family: 'Inter', sans-serif !important; }
 .leaflet-popup-content-wrapper {
   border-radius: 10px !important;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12) !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #fff !important;
+  color: #0f172a !important;
+}
+.leaflet-popup-tip {
+  background: #fff !important;
 }

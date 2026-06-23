@@ -106,3 +106,76 @@ def update_boat_location(boat_id):
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@boats_bp.route('/<boat_id>/path', methods=['GET'])
+def get_boat_path(boat_id):
+    """
+    GET /api/boats/<boat_id>/path?date=YYYY-MM-DD
+
+    Returns the ordered list of GPS coordinates recorded for a boat
+    on a given date (defaults to today UTC).
+    Reads from boat_history/<date>/<boat_id> in Realtime Database.
+
+    Response shape:
+    {
+      "status": "success",
+      "boat_id": "123456",
+      "date": "2026-06-23",
+      "count": 42,
+      "path": [
+        { "lat": 13.639937, "lng": 74.671308, "timestamp": "...", "speed_kmh": 12.3 },
+        ...
+      ]
+    }
+    """
+    try:
+        from datetime import date as date_cls
+        date_str = request.args.get('date', date_cls.today().isoformat())
+
+        ref = get_rtdb_ref(f'boat_history/{date_str}/{boat_id}')
+        raw = ref.get()
+
+        if not raw:
+            return jsonify({
+                'status': 'success',
+                'boat_id': boat_id,
+                'date': date_str,
+                'count': 0,
+                'path': []
+            }), 200
+
+        # Firebase push() keys are lexicographically ordered by time,
+        # so sorting by key gives chronological order.
+        path = []
+        for push_key in sorted(raw.keys()):
+            entry = raw[push_key]
+            if not isinstance(entry, dict):
+                continue
+            gps = entry.get('gps', {})
+            lat = gps.get('latitude')
+            lng = gps.get('longitude')
+            if lat is None or lng is None:
+                continue
+            path.append({
+                'lat':        float(lat),
+                'lng':        float(lng),
+                'altitude':   float(gps.get('altitude', 0)),
+                'speed_kmh':  float(gps.get('speed_kmh', 0)),
+                'satellites': int(gps.get('satellites', 0)),
+                'fix':        bool(gps.get('fix', False)),
+                'timestamp':  entry.get('timestamp', ''),
+            })
+
+        return jsonify({
+            'status': 'success',
+            'boat_id': boat_id,
+            'date': date_str,
+            'count': len(path),
+            'path': path
+        }), 200
+
+    except Exception as e:
+        print(f"[ERROR] get_boat_path: {e}")
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500

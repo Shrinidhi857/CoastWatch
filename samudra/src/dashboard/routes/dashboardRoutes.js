@@ -108,6 +108,27 @@ export const boatsAPI = {
       throw error;
     }
   },
+
+  /**
+   * Get today's GPS path for a boat.
+   * @param {string} boatId
+   * @param {string} [date]  YYYY-MM-DD, defaults to today
+   * @returns {{ boat_id, date, count, path: {lat,lng,timestamp,speed_kmh}[] }}
+   */
+  getPath: async (boatId, date) => {
+    try {
+      const dateParam = date || new Date().toISOString().slice(0, 10);
+      const response = await fetch(
+        `${API_BASE_URL}/boats/${boatId}/path?date=${dateParam}`,
+        { method: "GET", headers: apiHeaders }
+      );
+      if (!response.ok) throw new Error("Failed to fetch boat path");
+      return await response.json();
+    } catch (error) {
+      console.error(`[DashRoutes] Error fetching path for boat ${boatId}:`, error);
+      throw error;
+    }
+  },
 };
 
 // =============================================

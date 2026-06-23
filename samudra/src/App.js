@@ -1,9 +1,32 @@
 import React, { useState } from "react";
 import { DashboardPage } from "./dashboard";
 import { SimulationPage } from "./simulation";
+import HistoryPage from "./simulation/HistoryPage";
 
 function App() {
   const [currentPage, setCurrentPage] = useState("dashboard");
+  const [history, setHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem("coastwatch_simulation_history");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Error reading simulation history from localStorage:", e);
+      return [];
+    }
+  });
+
+  const addHistoryItem = (item) => {
+    setHistory((prev) => {
+      const updated = [item, ...prev];
+      localStorage.setItem("coastwatch_simulation_history", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    localStorage.removeItem("coastwatch_simulation_history");
+  };
 
   return (
     <div
@@ -15,31 +38,21 @@ function App() {
         {/* Brand */}
         <div className="flex items-center gap-3">
           {/* CoastWatch Logo */}
-          <div
-            className="shrink-0 flex items-center justify-center rounded-xl overflow-hidden"
-            style={{
-              width: 44,
-              height: 44,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              boxShadow: "0 2px 16px rgba(0,120,150,0.25), inset 0 1px 0 rgba(255,255,255,0.06)"
-            }}
-          >
+          
             <img
               src="/assets/logo.png"
               alt="CoastWatch Logo"
-              style={{ width: 36, height: 36, objectFit: "contain", filter: "drop-shadow(0 0 4px rgba(0,150,180,0.4))" }}
+              style={{ width: 40, height: 40}}
             />
-          </div>
+          
           <div>
             <div className="flex items-center gap-2">
               <span
-                className="text-sm uppercase"
-                style={{ color: "var(--text-primary)", fontWeight: 700, letterSpacing: "0.12em" }}
+                className="text-lg uppercase"
+                style={{ color: "var(--text-primary)", fontWeight: 900, letterSpacing: "0.12em" }}
               >
                 CoastWatch
               </span>
-              <span className="pro-badge">SAMUDRA v2</span>
             </div>
             <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
               Maritime Security &amp; Geofence Intelligence
@@ -51,7 +64,7 @@ function App() {
         {/* Page Tabs */}
         <div
           className="flex items-center p-1 rounded-lg w-full sm:w-auto"
-          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
+          style={{ background: "rgba(37,99,235,0.05)", border: "1px solid rgba(37,99,235,0.10)" }}
         >
           <button
             onClick={() => setCurrentPage("dashboard")}
@@ -72,12 +85,27 @@ function App() {
             </svg>
             Simulation
           </button>
+          <button
+            onClick={() => setCurrentPage("history")}
+            className={`nav-tab flex items-center gap-1.5 ${currentPage === "history" ? "active-history" : ""}`}
+          >
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            History
+          </button>
         </div>
       </nav>
 
       {/* Page Content */}
       <main className="flex-1 flex flex-col min-h-0">
-        {currentPage === "dashboard" ? <DashboardPage /> : <SimulationPage />}
+        {currentPage === "dashboard" ? (
+          <DashboardPage />
+        ) : currentPage === "simulation" ? (
+          <SimulationPage addHistoryItem={addHistoryItem} />
+        ) : (
+          <HistoryPage history={history} clearHistory={clearHistory} />
+        )}
       </main>
     </div>
   );

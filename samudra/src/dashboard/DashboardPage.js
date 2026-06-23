@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
   Polygon,
+  Polyline,
   useMapEvents,
   useMap,
 } from "react-leaflet";
@@ -147,8 +148,15 @@ const DashboardPage = () => {
   const [editMode, setEditMode] = useState(false);
   const [editedCoordinates, setEditedCoordinates] = useState(null);
 
-  // Selected boat for detailed view
+  // Selected boat for detailed view (modal open)
   const [selectedVessel, setSelectedVessel] = useState(null);
+
+  // Vessel whose path is currently drawn on the map
+  const [pathVessel, setPathVessel] = useState(null);
+
+  // Boat path (GPS track for today)
+  const [boatPath, setBoatPath] = useState(null);   // { boat_id, date, count, path[] }
+  const [pathLoading, setPathLoading] = useState(false);
 
   // Heatmap state
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -231,6 +239,21 @@ const DashboardPage = () => {
       console.error("Error fetching alerts:", err);
     }
   };
+
+  // Fetch today's GPS path for a vessel
+  const fetchBoatPath = useCallback(async (vessel) => {
+    setBoatPath(null);
+    setPathLoading(true);
+    try {
+      const result = await boatsAPI.getPath(vessel.id);
+      setBoatPath(result);
+    } catch (err) {
+      console.error("Error fetching boat path:", err);
+      setBoatPath({ boat_id: vessel.id, count: 0, path: [] });
+    } finally {
+      setPathLoading(false);
+    }
+  }, []);
 
   const handleMapClick = (e) => {
     if (!drawMode) return;
@@ -346,14 +369,14 @@ const DashboardPage = () => {
     <div className="w-full h-full flex flex-col flex-1" style={{ background: "var(--navy-950)" }}>
       {/* Server Connection Status */}
       {!serverConnected && (
-        <div className="animate-fade-in px-5 py-2.5 text-center text-sm font-medium" style={{ background: "rgba(239,68,68,0.12)", borderBottom: "1px solid rgba(239,68,68,0.25)", color: "#fca5a5" }}>
+        <div className="animate-fade-in px-5 py-2.5 text-center text-sm font-medium" style={{ background: "rgba(220,38,38,0.07)", borderBottom: "1px solid rgba(220,38,38,0.18)", color: "#b91c1c" }}>
           <span className="font-bold">Server Connection Error</span> — {error}
         </div>
       )}
 
       {/* Loading Indicator */}
       {loading && (
-        <div className="animate-fade-in px-5 py-2.5 text-center text-sm font-medium" style={{ background: "rgba(37,99,235,0.10)", borderBottom: "1px solid rgba(37,99,235,0.2)", color: "#93bbfd" }}>
+        <div className="animate-fade-in px-5 py-2.5 text-center text-sm font-medium" style={{ background: "rgba(37,99,235,0.06)", borderBottom: "1px solid rgba(37,99,235,0.14)", color: "#1d4ed8" }}>
           Connecting to server and loading vessel data…
         </div>
       )}
@@ -368,7 +391,7 @@ const DashboardPage = () => {
           {serverConnected && (
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="status-dot online"></span>
-              <span className="text-[11px]" style={{ color: "#4ade80" }}>Connected to Flask Server</span>
+              <span className="text-[11px]" style={{ color: "#16a34a" }}>Connected to Flask Server</span>
             </div>
           )}
         </div>
@@ -397,7 +420,7 @@ const DashboardPage = () => {
       {drawMode && (
         <div
           className="animate-fade-in px-5 py-2.5 flex justify-between items-center text-sm"
-          style={{ background: "rgba(37,99,235,0.08)", borderBottom: "1px solid rgba(37,99,235,0.18)", color: "#93bbfd" }}
+          style={{ background: "rgba(37,99,235,0.05)", borderBottom: "1px solid rgba(37,99,235,0.12)", color: "#1d4ed8" }}
         >
           <p className="text-[12px] font-medium">Click on the map to add vertices. Need at least 3 points to complete a geofence.</p>
           {drawnPolygon && (
@@ -420,9 +443,9 @@ const DashboardPage = () => {
       {alerts.length > 0 && (
         <div
           className="animate-fade-in px-5 py-3"
-          style={{ background: "rgba(239,68,68,0.07)", borderBottom: "1px solid rgba(239,68,68,0.18)" }}
+          style={{ background: "rgba(220,38,38,0.05)", borderBottom: "1px solid rgba(220,38,38,0.12)" }}
         >
-          <h3 className="text-[11px] font-semibold uppercase tracking-widest mb-2.5 flex items-center gap-2" style={{ color: "#f87171" }}>
+          <h3 className="text-[11px] font-semibold uppercase tracking-widest mb-2.5 flex items-center gap-2" style={{ color: "#dc2626" }}>
             <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse-dot 1.5s infinite" }}></span>
             Restricted Zone Violations — {alerts.length} Active
           </h3>
@@ -431,11 +454,11 @@ const DashboardPage = () => {
               <div
                 key={`${alert.boat_id}-alert`}
                 className="p-3 rounded-xl flex flex-col justify-between"
-                style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}
+                style={{ background: "rgba(220,38,38,0.05)", border: "1px solid rgba(220,38,38,0.14)" }}
               >
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <p className="font-semibold text-[13px]" style={{ color: "#fca5a5" }}>{alert.boat_name}</p>
+                    <p className="font-semibold text-[13px]" style={{ color: "#b91c1c" }}>{alert.boat_name}</p>
                     <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
                       {alert.location.latitude.toFixed(5)}, {alert.location.longitude.toFixed(5)}
                     </p>
@@ -458,9 +481,9 @@ const DashboardPage = () => {
       )}
 
       {/* Main content area */}
-      <div className="flex-1 flex gap-4 p-4 min-h-0" style={{ background: "var(--navy-950)" }}>
+      <div className="flex-1 flex gap-4 p-4 min-h-0" style={{ background: "#f8fafc" }}>
         {/* Map Container */}
-        <div className="flex-1 relative h-full rounded-xl overflow-hidden shadow-2xl" style={{ border: "1px solid var(--glass-border)" }}>
+        <div className="flex-1 relative h-full rounded-xl overflow-hidden shadow-2xl" style={{ border: "1px solid #e2e8f0" }}>
           <MapContainer
             center={MAP_CONFIG.DEFAULT_CENTER}
             zoom={MAP_CONFIG.DEFAULT_ZOOM}
@@ -582,6 +605,51 @@ const DashboardPage = () => {
               </>
             )}
 
+            {/* ── Boat GPS Track Polyline ───────────────────────── */}
+            {boatPath && boatPath.path && boatPath.path.length > 1 && (() => {
+              const pts = boatPath.path.map(p => [p.lat, p.lng]);
+              const first = pts[0];
+              const last  = pts[pts.length - 1];
+              return (
+                <>
+                  {/* Track line */}
+                  <Polyline
+                    positions={pts}
+                    pathOptions={{
+                      color: "#38bdf8",
+                      weight: 3,
+                      opacity: 0.85,
+                      dashArray: null,
+                    }}
+                  />
+                  {/* Start dot — green */}
+                  <Marker
+                    position={first}
+                    icon={L.divIcon({
+                      className: "",
+                      html: `<div style="width:12px;height:12px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 0 6px rgba(34,197,94,0.7)"></div>`,
+                      iconSize: [12, 12],
+                      iconAnchor: [6, 6],
+                    })}
+                  >
+                    <Popup><span style={{fontSize:12}}>&#x25CF; Track start<br/>{boatPath.path[0].timestamp}</span></Popup>
+                  </Marker>
+                  {/* End dot — yellow */}
+                  <Marker
+                    position={last}
+                    icon={L.divIcon({
+                      className: "",
+                      html: `<div style="width:12px;height:12px;border-radius:50%;background:#facc15;border:2px solid #fff;box-shadow:0 0 6px rgba(250,204,21,0.7)"></div>`,
+                      iconSize: [12, 12],
+                      iconAnchor: [6, 6],
+                    })}
+                  >
+                    <Popup><span style={{fontSize:12}}>&#x25CF; Latest position<br/>{boatPath.path[boatPath.path.length-1].timestamp}</span></Popup>
+                  </Marker>
+                </>
+              );
+            })()}
+
             {/* Vessel Markers */}
             {vessels.map((vessel) => {
               const inGeofence = vessel.in_restricted_zone || false;
@@ -593,64 +661,21 @@ const DashboardPage = () => {
                   icon={inGeofence ? boatIconRed : boatIcon}
                   title={vessel.name}
                   eventHandlers={{
-                    click: () => setSelectedVessel(vessel),
+                    click: () => {
+                      if (pathVessel && pathVessel.id === vessel.id) {
+                        // 2nd tap on the same vessel → open details modal
+                        setSelectedVessel(vessel);
+                      } else {
+                        // 1st tap → draw path, close any open modal
+                        setSelectedVessel(null);
+                        setPathVessel(vessel);
+                        fetchBoatPath(vessel);
+                        if (mapRef.current) mapRef.current.setView([vessel.lat, vessel.lng], 14);
+                      }
+                    },
                   }}
                 >
-                  <Popup>
-                    <div className="p-2 w-60">
-                      <h3 className="font-bold text-base text-slate-900">
-                        {vessel.name}
-                      </h3>
-                      <div className="mt-2 space-y-1 text-xs text-slate-600">
-                        <div className="flex justify-between border-b pb-0.5">
-                          <span className="font-semibold">Status:</span>
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              vessel.status === "Active"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-yellow-100 text-yellow-800"
-                            }`}
-                          >
-                            {vessel.status}
-                          </span>
-                        </div>
-                        <div className="flex justify-between border-b pb-0.5">
-                          <span className="font-semibold">Speed:</span>
-                          <span>{vessel.speed} knots</span>
-                        </div>
-                        <div className="flex justify-between border-b pb-0.5">
-                          <span className="font-semibold">Heading:</span>
-                          <span>{vessel.heading}°</span>
-                        </div>
-                        <div className="flex justify-between border-b pb-0.5">
-                          <span className="font-semibold">Crew:</span>
-                          <span>{vessel.crew_count}</span>
-                        </div>
-                        <div className="pt-1 text-[10px] text-slate-400">
-                          {vessel.lat.toFixed(5)}, {vessel.lng.toFixed(5)}
-                        </div>
-                        {inGeofence && (
-                          <div className="mt-1 bg-red-50 border border-red-200 text-red-700 font-bold p-1 rounded text-center text-[10px]">
-                            ⚠️ RESTRICTED ZONE VIOLATION
-                          </div>
-                        )}
-                      </div>
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          onClick={() => setSelectedVessel(vessel)}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition"
-                        >
-                          Details
-                        </button>
-                        <button
-                          onClick={() => deleteVessel(vessel.id)}
-                          className="flex-1 bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs font-semibold transition"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </Popup>
+                  {/* No auto-opening Popup — path renders first; 2nd tap opens modal */}
                 </Marker>
               );
             })}
@@ -663,7 +688,7 @@ const DashboardPage = () => {
           <div className="glass-card rounded-xl overflow-hidden flex flex-col">
             <div
               className="px-4 py-3 flex justify-between items-center"
-              style={{ borderBottom: "1px solid var(--glass-border)", background: "rgba(30,53,102,0.4)" }}
+              style={{ borderBottom: "1px solid var(--glass-border)", background: "rgba(37,99,235,0.04)" }}
             >
               <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>Fleet Status</span>
               <span className="pro-badge">{vessels.length} Active</span>
@@ -681,16 +706,26 @@ const DashboardPage = () => {
                     <div
                       key={vessel.id}
                       onClick={() => {
-                        setSelectedVessel(vessel);
-                        if (mapRef.current) mapRef.current.setView([vessel.lat, vessel.lng], 12);
+                        if (pathVessel && pathVessel.id === vessel.id) {
+                          setSelectedVessel(vessel);
+                        } else {
+                          setSelectedVessel(null);
+                          setPathVessel(vessel);
+                          fetchBoatPath(vessel);
+                          if (mapRef.current) mapRef.current.setView([vessel.lat, vessel.lng], 14);
+                        }
                       }}
                       className="px-4 py-3 flex justify-between items-start cursor-pointer transition-all"
                       style={{
-                        background: inGeofence ? "rgba(239,68,68,0.06)" : "transparent",
-                        borderLeft: inGeofence ? "3px solid rgba(239,68,68,0.6)" : "3px solid transparent",
+                        background: pathVessel && pathVessel.id === vessel.id
+                          ? "rgba(56,189,248,0.08)"
+                          : inGeofence ? "rgba(239,68,68,0.06)" : "transparent",
+                        borderLeft: pathVessel && pathVessel.id === vessel.id
+                          ? "3px solid rgba(56,189,248,0.7)"
+                          : inGeofence ? "3px solid rgba(239,68,68,0.6)" : "3px solid transparent",
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = inGeofence ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.03)"}
-                      onMouseLeave={e => e.currentTarget.style.background = inGeofence ? "rgba(239,68,68,0.06)" : "transparent"}
+                      onMouseEnter={e => e.currentTarget.style.background = pathVessel && pathVessel.id === vessel.id ? "rgba(56,189,248,0.13)" : inGeofence ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.03)"}
+                      onMouseLeave={e => e.currentTarget.style.background = pathVessel && pathVessel.id === vessel.id ? "rgba(56,189,248,0.08)" : inGeofence ? "rgba(239,68,68,0.06)" : "transparent"}
                     >
                       <div className="space-y-0.5">
                         <h4 className="font-semibold text-[13px]" style={{ color: "var(--text-primary)" }}>{vessel.name}</h4>
@@ -722,11 +757,26 @@ const DashboardPage = () => {
             </div>
           </div>
 
+          {/* Path-active hint */}
+          {pathVessel && !selectedVessel && (
+            <div
+              className="animate-fade-in px-4 py-2.5 rounded-xl text-[11px] flex items-center gap-2"
+              style={{ background: "rgba(56,189,248,0.08)", border: "1px solid rgba(56,189,248,0.2)", color: "#38bdf8" }}
+            >
+              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#38bdf8", flexShrink: 0 }}></span>
+              <span>Path shown for <strong>{pathVessel.name}</strong>. Tap the boat again to open details.</span>
+              <button
+                onClick={() => { setBoatPath(null); setPathVessel(null); }}
+                style={{ marginLeft: "auto", flexShrink: 0, color: "#38bdf8", opacity: 0.7, fontWeight: 700, fontSize: 13 }}
+                title="Clear track"
+              >✕</button>
+            </div>
+          )}
           {/* Geofences List */}
           <div className="glass-card rounded-xl overflow-hidden flex flex-col">
             <div
               className="px-4 py-3 flex justify-between items-center"
-              style={{ borderBottom: "1px solid var(--glass-border)", background: "rgba(14,31,61,0.6)" }}
+              style={{ borderBottom: "1px solid var(--glass-border)", background: "rgba(37,99,235,0.04)" }}
             >
               <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>Geofence Zones</span>
               <span className="pro-badge">{geofences.length} Total</span>
@@ -830,7 +880,20 @@ const DashboardPage = () => {
       )}
 
       {/* Vessel Details Modal */}
-      {selectedVessel && (
+      {selectedVessel && (() => {
+        // Calculate approx total distance for path display
+        let totalKm = 0;
+        if (boatPath && boatPath.path && boatPath.path.length > 1) {
+          for (let i = 1; i < boatPath.path.length; i++) {
+            const a = boatPath.path[i - 1], b = boatPath.path[i];
+            const R = 6371;
+            const dLat = (b.lat - a.lat) * Math.PI / 180;
+            const dLng = (b.lng - a.lng) * Math.PI / 180;
+            const s = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+            totalKm += R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+          }
+        }
+        return (
         <div className="fixed inset-0 flex items-center justify-center z-[9999]" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}>
           <div className="w-11/12 max-w-xl rounded-2xl overflow-hidden animate-fade-in" style={{ background: "var(--navy-900)", border: "1px solid var(--glass-border)", boxShadow: "0 24px 80px rgba(0,0,0,0.6)" }}>
             {/* Modal Header */}
@@ -899,8 +962,56 @@ const DashboardPage = () => {
                 </div>
               </div>
 
+              {/* Today's Path Summary */}
+              <div className="p-4 rounded-xl" style={{ background: "rgba(56,189,248,0.06)", border: "1px solid rgba(56,189,248,0.2)" }}>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: "#38bdf8" }}>
+                    Today's Track
+                  </p>
+                  {pathLoading && (
+                    <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>Loading…</span>
+                  )}
+                  {boatPath && !pathLoading && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded" style={{ background: "rgba(56,189,248,0.12)", color: "#38bdf8", border: "1px solid rgba(56,189,248,0.25)" }}>
+                      {boatPath.count} points
+                    </span>
+                  )}
+                </div>
+                {boatPath && !pathLoading && boatPath.count > 0 ? (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Points</p>
+                      <p className="text-[14px] font-semibold mt-0.5" style={{ color: "var(--text-primary)" }}>{boatPath.count}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Distance</p>
+                      <p className="text-[14px] font-semibold mt-0.5" style={{ color: "var(--text-primary)" }}>{totalKm.toFixed(2)} km</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Date</p>
+                      <p className="text-[11px] font-mono mt-0.5" style={{ color: "var(--text-secondary)" }}>{boatPath.date}</p>
+                    </div>
+                  </div>
+                ) : !pathLoading ? (
+                  <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>No track data for today yet.</p>
+                ) : null}
+                {boatPath && boatPath.count > 0 && (
+                  <div className="mt-3 flex items-center gap-3 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#22c55e", marginRight: 4, verticalAlign: "middle" }}></span>Start
+                    <span style={{ display: "inline-block", width: 30, height: 2, background: "#38bdf8", verticalAlign: "middle" }}></span>
+                    <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#facc15", marginLeft: 4, verticalAlign: "middle" }}></span>Current
+                  </div>
+                )}
+              </div>
+
               {/* Actions */}
               <div className="flex gap-3 pt-1" style={{ borderTop: "1px solid var(--glass-border)", paddingTop: "16px" }}>
+                <button
+                  onClick={() => { setBoatPath(null); setPathVessel(null); setSelectedVessel(null); }}
+                  className="pro-btn-ghost py-2.5 px-3"
+                  style={{ color: "#38bdf8", borderColor: "rgba(56,189,248,0.25)" }}
+                  title="Clear track from map"
+                >Clear Track</button>
                 <button
                   onClick={() => deleteVessel(selectedVessel.id)}
                   className="flex-1 pro-btn-ghost py-2.5"
@@ -908,12 +1019,13 @@ const DashboardPage = () => {
                   onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.1)"}
                   onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
                 >Remove Vessel</button>
-                <button onClick={() => setSelectedVessel(null)} className="flex-1 pro-btn-primary py-2.5">Close</button>
+                <button onClick={() => { setBoatPath(null); setPathVessel(null); setSelectedVessel(null); }} className="flex-1 pro-btn-primary py-2.5">Close</button>
               </div>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

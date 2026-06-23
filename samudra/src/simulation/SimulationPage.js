@@ -27,7 +27,7 @@ import {
   ALERT_TYPES,
 } from "../utils/alertSystem";
 
-const SimulationPage = () => {
+const SimulationPage = ({ addHistoryItem }) => {
   const [geofences, setGeofences] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -39,11 +39,36 @@ const SimulationPage = () => {
   const [selectedPath, setSelectedPath] = useState("harbor_tour");
   const [boatTrail, setBoatTrail] = useState([]);
 
+  // Speed and Intrusion Tracking State
+  const [expectedSpeed, setExpectedSpeed] = useState(12);
+  const [actualSpeed, setActualSpeed] = useState(8);
+  const [activeSession, setActiveSession] = useState(null);
+
   const mapRef = useRef();
   const simulationIntervalRef = useRef(null);
   const alertManagerRef = useRef(new AlertManager());
   const restrictedZoneEnteredRef = useRef(false);
   const backendRestrictedZoneEnteredRef = useRef(false);
+
+  const activeSessionRef = useRef(null);
+  const expectedSpeedRef = useRef(expectedSpeed);
+  const actualSpeedRef = useRef(actualSpeed);
+
+  useEffect(() => {
+    expectedSpeedRef.current = expectedSpeed;
+  }, [expectedSpeed]);
+
+  useEffect(() => {
+    actualSpeedRef.current = actualSpeed;
+    if (boatState) {
+      setBoatState((prev) => (prev ? { ...prev, speed: actualSpeed } : null));
+    }
+  }, [actualSpeed]);
+
+  const checkIfSuspicious = (actual, expected) => {
+    const deviation = Math.abs((actual - expected) / expected);
+    return deviation > 0.20; // 20% deviation threshold
+  };
 
   // Fetch geofences to display on the map for reference
   useEffect(() => {
@@ -75,12 +100,15 @@ const SimulationPage = () => {
     const startPosition = path[0];
 
     const newBoatState = initializeBoat("sim-boat-1", startPosition, path);
+    newBoatState.speed = actualSpeed;
 
     setBoatState(newBoatState);
     setBoatTrail([startPosition]);
     setSimulationAlerts([]);
     restrictedZoneEnteredRef.current = false;
     backendRestrictedZoneEnteredRef.current = false;
+    setActiveSession(null);
+    activeSessionRef.current = null;
 
     const initAlert = createAlert(
       ALERT_TYPES.INFO,
@@ -104,6 +132,7 @@ const SimulationPage = () => {
     if (simulationActive) return;
 
     const updatedBoatState = startBoatMovement(boatState);
+    updatedBoatState.speed = actualSpeed;
     setBoatState(updatedBoatState);
     setSimulationActive(true);
 
@@ -125,6 +154,29 @@ const SimulationPage = () => {
     setBoatState(stoppedBoatState);
     setSimulationActive(false);
 
+    if (activeSessionRef.current) {
+      const exitTime = new Date();
+      const duration = ((exitTime - activeSessionRef.current.entryTime) / 1000).toFixed(1);
+      const finalSession = {
+        id: `session-${Date.now()}`,
+        boatId: boatState.id,
+        pathName: selectedPath,
+        entryTime: activeSessionRef.current.entryTime.toISOString(),
+        exitTime: exitTime.toISOString(),
+        duration,
+        expectedSpeed: activeSessionRef.current.expectedSpeed,
+        actualSpeed: activeSessionRef.current.actualSpeed,
+        isSuspicious: activeSessionRef.current.isSuspicious,
+      };
+      addHistoryItem(finalSession);
+      setActiveSession({
+        ...activeSessionRef.current,
+        exitTime,
+        duration,
+      });
+      activeSessionRef.current = null;
+    }
+
     const stopAlert = createAlert(
       ALERT_TYPES.INFO,
       ALERT_MESSAGES.SIMULATION_STOPPED,
@@ -143,6 +195,8 @@ const SimulationPage = () => {
     setSimulationAlerts([]);
     restrictedZoneEnteredRef.current = false;
     backendRestrictedZoneEnteredRef.current = false;
+    setActiveSession(null);
+    activeSessionRef.current = null;
 
     const resetAlert = createAlert(
       ALERT_TYPES.INFO,
@@ -171,7 +225,7 @@ const SimulationPage = () => {
 
         // Two layer check occurs inside updateBoatPosition (synchronous Turf.js and async backend)
         const updatedState = updateBoatPosition(
-          prevState,
+          { ...prevState, speed: actualSpeedRef.current },
           polygonCoords,
           (res) => {
             // Update state with backend classification results asynchronously
@@ -228,17 +282,63 @@ const SimulationPage = () => {
             updatedState.hasEnteredRestrictedZone
           ) {
             restrictedZoneEnteredRef.current = true;
+
+            const entryTime = new Date();
+            const isSusp = checkIfSuspicious(actualSpeedRef.current, expectedSpeedRef.current);
+            const session = {
+              entryTime,
+              exitTime: null,
+              duration: "0.0",
+              expectedSpeed: expectedSpeedRef.current,
+              actualSpeed: actualSpeedRef.current,
+              isSuspicious: isSusp,
+            };
+            activeSessionRef.current = session;
+            setActiveSession(session);
+
             const alert = createAlert(
-              ALERT_TYPES.DANGER,
-              ALERT_MESSAGES.BOAT_ENTERED_RESTRICTED,
+              isSusp ? ALERT_TYPES.DANGER : ALERT_TYPES.WARNING,
+              isSusp 
+                ? `🚨 Alert: Boat entered restricted zone at SUSPICIOUS speed (${actualSpeedRef.current} kts vs Expected ${expectedSpeedRef.current} kts)!`
+                : `⚠️ Info: Boat entered restricted zone at normal transit speed (${actualSpeedRef.current} kts).`,
               "boat_sim"
             );
             setSimulationAlerts((prev) => [...prev, alert]);
             alertManagerRef.current.addAlert(alert);
+          } else if (activeSessionRef.current) {
+            // Update active session duration live
+            const dur = ((new Date() - activeSessionRef.current.entryTime) / 1000).toFixed(1);
+            activeSessionRef.current.duration = dur;
+            setActiveSession((prev) => (prev ? { ...prev, duration: dur } : null));
           }
         } else {
           if (restrictedZoneEnteredRef.current) {
             restrictedZoneEnteredRef.current = false;
+
+            if (activeSessionRef.current) {
+              const exitTime = new Date();
+              const duration = ((exitTime - activeSessionRef.current.entryTime) / 1000).toFixed(1);
+              const finalSession = {
+                id: `session-${Date.now()}`,
+                boatId: updatedState.id,
+                pathName: selectedPath,
+                entryTime: activeSessionRef.current.entryTime.toISOString(),
+                exitTime: exitTime.toISOString(),
+                duration,
+                expectedSpeed: activeSessionRef.current.expectedSpeed,
+                actualSpeed: activeSessionRef.current.actualSpeed,
+                isSuspicious: activeSessionRef.current.isSuspicious,
+              };
+
+              addHistoryItem(finalSession);
+              setActiveSession({
+                ...activeSessionRef.current,
+                exitTime,
+                duration,
+              });
+              activeSessionRef.current = null;
+            }
+
             const alert = createAlert(
               ALERT_TYPES.INFO,
               ALERT_MESSAGES.BOAT_LEFT_RESTRICTED,
@@ -251,6 +351,30 @@ const SimulationPage = () => {
 
         // Complete path check
         if (!updatedState.isMoving) {
+          if (activeSessionRef.current) {
+            const exitTime = new Date();
+            const duration = ((exitTime - activeSessionRef.current.entryTime) / 1000).toFixed(1);
+            const finalSession = {
+              id: `session-${Date.now()}`,
+              boatId: updatedState.id,
+              pathName: selectedPath,
+              entryTime: activeSessionRef.current.entryTime.toISOString(),
+              exitTime: exitTime.toISOString(),
+              duration,
+              expectedSpeed: activeSessionRef.current.expectedSpeed,
+              actualSpeed: activeSessionRef.current.actualSpeed,
+              isSuspicious: activeSessionRef.current.isSuspicious,
+            };
+
+            addHistoryItem(finalSession);
+            setActiveSession({
+              ...activeSessionRef.current,
+              exitTime,
+              duration,
+            });
+            activeSessionRef.current = null;
+          }
+
           const completeAlert = createAlert(
             ALERT_TYPES.SUCCESS,
             ALERT_MESSAGES.SIMULATION_COMPLETED,
@@ -269,7 +393,13 @@ const SimulationPage = () => {
         clearInterval(simulationIntervalRef.current);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simulationActive, boatState]);
+
+  const formatTimeHHMMSS = (date) => {
+    if (!date) return "N/A";
+    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
 
   return (
     <div className="w-full h-full flex flex-col flex-1" style={{ background: "var(--navy-950)" }}>
@@ -296,43 +426,79 @@ const SimulationPage = () => {
           <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "0.01em" }}>Boat Simulation Control Center</h2>
           <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>Test and validate PIP precision and real-time geofence warning triggers.</p>
         </div>
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <select
-            value={selectedPath}
-            onChange={(e) => {
-              const pathKey = e.target.value;
-              setSelectedPath(pathKey);
-              if (!simulationActive) initializeSimulation(pathKey);
-            }}
-            disabled={simulationActive}
-            className="rounded-lg px-3 py-2 text-[12px] font-medium focus:outline-none"
-            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--glass-border)", color: "var(--text-secondary)", minWidth: 180 }}
-          >
-            <option value="harbor_tour">Harbor Tour</option>
-            <option value="coastal_patrol">Coastal Patrol</option>
-            <option value="restricted_zone_approach">Restricted Zone Approach</option>
-          </select>
-
-          {!simulationActive ? (
-            <>
-              <button
-                onClick={() => { if (!boatState) initializeSimulation(); startSimulation(); }}
-                className="pro-btn-primary"
-                style={{ background: "linear-gradient(135deg,#166534,#16a34a)", boxShadow: "0 2px 12px rgba(22,163,74,0.25)", border: "1px solid rgba(34,197,94,0.2)" }}
-              >
-                ▶ Start
-              </button>
-              <button onClick={resetSimulation} className="pro-btn-ghost">↻ Reset</button>
-            </>
-          ) : (
-            <button
-              onClick={stopSimulation}
-              className="pro-btn-ghost"
-              style={{ color: "#fca5a5", borderColor: "rgba(239,68,68,0.25)" }}
+        <div className="flex flex-wrap items-end gap-3 w-full md:w-auto">
+          {/* Simulation Route */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[9px] uppercase tracking-wider font-semibold" style={{ color: "var(--text-secondary)" }}>Simulation Route</span>
+            <select
+              value={selectedPath}
+              onChange={(e) => {
+                const pathKey = e.target.value;
+                setSelectedPath(pathKey);
+                if (!simulationActive) initializeSimulation(pathKey);
+              }}
+              disabled={simulationActive}
+              className="rounded-lg px-3 py-1.5 text-[12px] font-medium focus:outline-none"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--glass-border)", color: "var(--text-secondary)", minWidth: 160, height: 32 }}
             >
-              ⏹ Stop
-            </button>
-          )}
+              <option value="harbor_tour">Harbor Tour</option>
+              <option value="coastal_patrol">Coastal Patrol</option>
+              <option value="restricted_zone_approach">Restricted Zone Approach</option>
+            </select>
+          </div>
+
+          {/* Expected Speed */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[9px] uppercase tracking-wider font-semibold" style={{ color: "var(--text-secondary)" }}>Expected Speed (kts)</span>
+            <input
+              type="number"
+              value={expectedSpeed}
+              min="1"
+              max="50"
+              onChange={(e) => setExpectedSpeed(Math.max(1, parseInt(e.target.value) || 1))}
+              disabled={simulationActive}
+              className="rounded-lg px-2 text-[12px] font-mono text-center focus:outline-none"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--glass-border)", color: "var(--text-primary)", width: 90, height: 32 }}
+            />
+          </div>
+
+          {/* Actual Speed */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[9px] uppercase tracking-wider font-semibold" style={{ color: "var(--text-secondary)" }}>Actual Speed (kts)</span>
+            <input
+              type="number"
+              value={actualSpeed}
+              min="1"
+              max="50"
+              onChange={(e) => setActualSpeed(Math.max(1, parseInt(e.target.value) || 1))}
+              disabled={simulationActive}
+              className="rounded-lg px-2 text-[12px] font-mono text-center focus:outline-none"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--glass-border)", color: "var(--text-primary)", width: 90, height: 32 }}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 h-[32px]">
+            {!simulationActive ? (
+              <>
+                <button
+                  onClick={() => { if (!boatState) initializeSimulation(); startSimulation(); }}
+                  className="pro-btn-primary h-8 py-0 flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg,#166534,#16a34a)", boxShadow: "0 2px 12px rgba(22,163,74,0.25)", border: "1px solid rgba(34,197,94,0.2)" }}
+                >
+                  ▶ Start
+                </button>
+                <button onClick={resetSimulation} className="pro-btn-ghost h-8 py-0 flex items-center justify-center">↻ Reset</button>
+              </>
+            ) : (
+              <button
+                onClick={stopSimulation}
+                className="pro-btn-ghost h-8 py-0 flex items-center justify-center"
+                style={{ color: "#fca5a5", borderColor: "rgba(239,68,68,0.25)" }}
+              >
+                ⏹ Stop
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -411,6 +577,87 @@ const SimulationPage = () => {
 
         {/* Sidebar panels */}
         <div className="w-full lg:w-80 flex flex-col gap-3 overflow-y-auto lg:max-h-full">
+          {/* Active Intrusion Telemetry Panel */}
+          <div 
+            className="glass-card rounded-xl overflow-hidden transition-all duration-300"
+            style={{ 
+              borderLeft: activeSession 
+                ? activeSession.isSuspicious 
+                  ? "4px solid #ef4444" 
+                  : "4px solid #f59e0b"
+                : "4px solid var(--glass-border)",
+              boxShadow: activeSession
+                ? activeSession.isSuspicious
+                  ? "0 4px 20px rgba(239, 68, 68, 0.15)"
+                  : "0 4px 20px rgba(245, 158, 11, 0.15)"
+                : "0 4px 24px rgba(0,0,0,0.35)"
+            }}
+          >
+            <div className="px-4 py-3 flex justify-between items-center" style={{ borderBottom: "1px solid var(--glass-border)", background: "rgba(14,31,61,0.6)" }}>
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-200">Active Intrusion Telemetry</span>
+              {activeSession ? (
+                <span 
+                  className="status-dot online shrink-0" 
+                  style={{ 
+                    backgroundColor: activeSession.isSuspicious ? "#ef4444" : "#f59e0b",
+                    boxShadow: activeSession.isSuspicious ? "0 0 10px rgba(239, 68, 68, 0.5)" : "0 0 10px rgba(245, 158, 11, 0.5)",
+                    animationDuration: "1.5s"
+                  }}
+                />
+              ) : (
+                <span className="status-dot shrink-0" style={{ backgroundColor: "#22c55e", animation: "none" }} />
+              )}
+            </div>
+            <div className="p-4 text-[12px]">
+              {activeSession ? (
+                <div className="space-y-2.5">
+                  <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
+                    <span className="text-slate-400">Security Category</span>
+                    {activeSession.isSuspicious ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
+                        Suspicious 🚩
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-green-500/10 text-green-400 border border-green-500/20">
+                        Passing Vessel 🟢
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
+                    <span className="text-slate-400">Entry Time</span>
+                    <span className="font-mono text-slate-200">{formatTimeHHMMSS(activeSession.entryTime)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
+                    <span className="text-slate-400">Time in Zone</span>
+                    <span className="font-mono font-semibold text-red-400 animate-pulse">{activeSession.duration}s</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
+                    <span className="text-slate-400">Target Passage Speed</span>
+                    <span className="font-mono text-slate-200">{activeSession.expectedSpeed} knots</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04]">
+                    <span className="text-slate-400">Simulated Speed</span>
+                    <span className="font-mono font-semibold text-slate-100">{activeSession.actualSpeed} knots</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5">
+                    <span className="text-slate-400">Deviation</span>
+                    <span className={`font-mono font-semibold ${activeSession.isSuspicious ? "text-red-400" : "text-green-400"}`}>
+                      {(((activeSession.actualSpeed - activeSession.expectedSpeed) / activeSession.expectedSpeed) * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-slate-400 space-y-2">
+                  <svg className="w-6 h-6 text-green-400 mx-auto opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  <p className="text-[11px] font-medium text-slate-300">Geofence Status Clear</p>
+                  <p className="text-[10px] text-slate-500">Vessel is safely outside restricted perimeter.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Telemetry panel */}
           <div className="glass-card rounded-xl overflow-hidden">
             <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--glass-border)", background: "rgba(14,31,61,0.6)" }}>
