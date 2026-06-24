@@ -26,6 +26,14 @@ import {
 } from "./utils/helpers";
 import { MAP_CONFIG } from "../config/config";
 
+// ── WDPA zone realm config ──────────────────────────────────────
+const REALM_CONFIG = {
+  Coastal:     { color: "#06b6d4", fill: "#06b6d4", label: "Coastal",     icon: "🏖️" },
+  Marine:      { color: "#3b82f6", fill: "#3b82f6", label: "Marine",      icon: "🌊" },
+  Terrestrial: { color: "#22c55e", fill: "#22c55e", label: "Terrestrial", icon: "🌿" },
+};
+const ALL_REALMS = ["Coastal", "Marine", "Terrestrial"];
+
 // Custom boat icon
 const boatIcon = new L.Icon({
   iconUrl: "/assets/boat-blue.png",
@@ -148,6 +156,11 @@ const DashboardPage = () => {
   const [editMode, setEditMode] = useState(false);
   const [editedCoordinates, setEditedCoordinates] = useState(null);
 
+  // WDPA official restricted zones
+  const [wdpaFeatures, setWdpaFeatures] = useState([]);
+  const [showWdpa, setShowWdpa] = useState(true);
+  const [activeRealms, setActiveRealms] = useState(new Set(ALL_REALMS));
+
   // Selected boat for detailed view (modal open)
   const [selectedVessel, setSelectedVessel] = useState(null);
 
@@ -164,6 +177,23 @@ const DashboardPage = () => {
   const mapRef = useRef();
   const boatsIntervalRef = useRef(null);
   const alertsIntervalRef = useRef(null);
+
+  // Load WDPA GeoJSON on mount
+  useEffect(() => {
+    fetch("/wdpa_polygons.geojson")
+      .then((r) => r.json())
+      .then((geojson) => setWdpaFeatures(geojson.features || []))
+      .catch((err) => console.error("WDPA load error:", err));
+  }, []);
+
+  const toggleRealm = (realm) => {
+    setActiveRealms((prev) => {
+      const next = new Set(prev);
+      if (next.has(realm)) next.delete(realm);
+      else next.add(realm);
+      return next;
+    });
+  };
 
   // Initialize and fetch data from server
   useEffect(() => {
@@ -383,7 +413,7 @@ const DashboardPage = () => {
 
       {/* Sub-header toolbar */}
       <div
-        className="px-5 py-3 flex justify-between items-center shrink-0"
+        className="px-5 py-3 flex flex-wrap justify-between items-center gap-3 shrink-0"
         style={{ background: "var(--navy-900)", borderBottom: "1px solid var(--glass-border)" }}
       >
         <div>
@@ -395,6 +425,39 @@ const DashboardPage = () => {
             </div>
           )}
         </div>
+
+        {/* WDPA Realm filter tabs */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-widest mr-1" style={{ color: "var(--text-muted)" }}>Protected Zones</span>
+          <button
+            onClick={() => setShowWdpa(!showWdpa)}
+            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all"
+            style={showWdpa
+              ? { background: "rgba(239,68,68,0.10)", color: "#dc2626", border: "1px solid rgba(239,68,68,0.22)" }
+              : { background: "rgba(100,116,139,0.08)", color: "#64748b", border: "1px solid #e2e8f0" }}
+            title={showWdpa ? "Hide all WDPA zones" : "Show WDPA zones"}
+          >
+            {showWdpa ? "🔴 Visible" : "⬜ Hidden"}
+          </button>
+          {showWdpa && ALL_REALMS.map((realm) => {
+            const cfg = REALM_CONFIG[realm];
+            const active = activeRealms.has(realm);
+            return (
+              <button
+                key={realm}
+                onClick={() => toggleRealm(realm)}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all"
+                style={active
+                  ? { background: `${cfg.color}18`, color: cfg.color, border: `1px solid ${cfg.color}44` }
+                  : { background: "rgba(100,116,139,0.06)", color: "#94a3b8", border: "1px solid #e2e8f0", textDecoration: "line-through" }}
+                title={`${active ? "Hide" : "Show"} ${cfg.label} zones`}
+              >
+                {cfg.icon} {cfg.label}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex gap-2">
           <button
             onClick={() => setShowHeatmap(!showHeatmap)}
@@ -439,51 +502,55 @@ const DashboardPage = () => {
         </div>
       )}
 
-      {/* Alerts Section */}
-      {alerts.length > 0 && (
-        <div
-          className="animate-fade-in px-5 py-3"
-          style={{ background: "rgba(220,38,38,0.05)", borderBottom: "1px solid rgba(220,38,38,0.12)" }}
-        >
-          <h3 className="text-[11px] font-semibold uppercase tracking-widest mb-2.5 flex items-center gap-2" style={{ color: "#dc2626" }}>
-            <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse-dot 1.5s infinite" }}></span>
-            Restricted Zone Violations — {alerts.length} Active
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {alerts.map((alert) => (
-              <div
-                key={`${alert.boat_id}-alert`}
-                className="p-3 rounded-xl flex flex-col justify-between"
-                style={{ background: "rgba(220,38,38,0.05)", border: "1px solid rgba(220,38,38,0.14)" }}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <p className="font-semibold text-[13px]" style={{ color: "#b91c1c" }}>{alert.boat_name}</p>
-                    <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                      {alert.location.latitude.toFixed(5)}, {alert.location.longitude.toFixed(5)}
-                    </p>
-                  </div>
-                  <span
-                    className="text-[10px] uppercase font-bold px-2 py-0.5 rounded"
-                    style={{ background: alert.severity === "high" ? "rgba(239,68,68,0.25)" : "rgba(234,88,12,0.25)", color: alert.severity === "high" ? "#fca5a5" : "#fdba74" }}
-                  >
-                    {alert.severity}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-[11px] pt-2 mt-1" style={{ borderTop: "1px solid rgba(239,68,68,0.15)", color: "var(--text-muted)" }}>
-                  <p>Speed: <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>{alert.speed} km/h</span></p>
-                  <p className="text-[10px]">{alert.updated_at ? new Date(alert.updated_at).toLocaleTimeString() : ""}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Main content area */}
-      <div className="flex-1 flex gap-4 p-4 min-h-0" style={{ background: "#f8fafc" }}>
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 p-4 min-h-0 overflow-y-auto lg:overflow-hidden" style={{ background: "#f8fafc" }}>
         {/* Map Container */}
-        <div className="flex-1 relative h-full rounded-xl overflow-hidden shadow-2xl" style={{ border: "1px solid #e2e8f0" }}>
+        <div className="flex-1 relative min-h-[450px] lg:h-full rounded-xl overflow-hidden shadow-2xl" style={{ border: "1px solid #e2e8f0" }}>
+          {/* Alerts Section (Floating on Map) */}
+          {alerts.length > 0 && (
+            <div
+              className="absolute top-3 left-[56px] z-[1000] max-w-[320px] w-full flex flex-col gap-2 p-3.5 rounded-xl border animate-fade-in shadow-lg"
+              style={{
+                background: "rgba(255, 255, 255, 0.95)",
+                backdropFilter: "blur(8px)",
+                borderColor: "rgba(239, 68, 68, 0.25)",
+                maxHeight: "calc(100% - 24px)",
+              }}
+            >
+              <h3 className="text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: "#dc2626" }}>
+                <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse-dot 1.5s infinite" }}></span>
+                Restricted Violations ({alerts.length})
+              </h3>
+              <div className="overflow-y-auto flex flex-col gap-1.5 pr-0.5" style={{ maxHeight: "220px" }}>
+                {alerts.map((alert) => (
+                  <div
+                    key={`${alert.boat_id}-alert`}
+                    className="p-2.5 rounded-lg flex flex-col justify-between"
+                    style={{ background: "rgba(239, 68, 68, 0.04)", border: "1px solid rgba(239, 68, 68, 0.08)" }}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold text-xs text-slate-900">{alert.boat_name}</p>
+                        <p className="text-[10px] mt-0.5 text-slate-500 font-mono">
+                          {alert.location.latitude.toFixed(5)}, {alert.location.longitude.toFixed(5)}
+                        </p>
+                      </div>
+                      <span
+                        className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded"
+                        style={{ background: alert.severity === "high" ? "rgba(239,68,68,0.12)" : "rgba(234,88,12,0.12)", color: alert.severity === "high" ? "#dc2626" : "#ea580c" }}
+                      >
+                        {alert.severity}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] pt-1.5 mt-1 border-t border-slate-100 text-slate-500">
+                      <p>Speed: <span className="font-semibold text-slate-700">{alert.speed} km/h</span></p>
+                      <p className="text-[9px]">{alert.updated_at ? new Date(alert.updated_at).toLocaleTimeString() : ""}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <MapContainer
             center={MAP_CONFIG.DEFAULT_CENTER}
             zoom={MAP_CONFIG.DEFAULT_ZOOM}
@@ -503,6 +570,82 @@ const DashboardPage = () => {
 
             {/* Seafloor depth heatmap layer */}
             {showHeatmap && <HeatmapLayer />}
+
+            {/* ── Official Restricted Zones (WDPA) ─────────────── */}
+            {showWdpa && wdpaFeatures
+              .filter((f) => activeRealms.has(f.properties.REALM))
+              .map((feature) => {
+                const props = feature.properties;
+                const realm = props.REALM || "Terrestrial";
+                const cfg = REALM_CONFIG[realm] || REALM_CONFIG.Terrestrial;
+                const geom = feature.geometry;
+                if (!geom) return null;
+
+                // Flatten MultiPolygon / Polygon rings to Leaflet [lat,lng] arrays
+                const rings =
+                  geom.type === "MultiPolygon"
+                    ? geom.coordinates.flatMap((poly) =>
+                        poly.map((ring) => ring.map(([lng, lat]) => [lat, lng]))
+                      )
+                    : geom.coordinates.map((ring) => ring.map(([lng, lat]) => [lat, lng]));
+
+                return rings.map((positions, ri) => (
+                  <Polygon
+                    key={`wdpa-${props.SITE_ID}-${ri}`}
+                    positions={positions}
+                    pathOptions={{
+                      color: cfg.color,
+                      weight: 1.5,
+                      opacity: 0.75,
+                      fillColor: cfg.fill,
+                      fillOpacity: 0.12,
+                      dashArray: "4 3",
+                    }}
+                  >
+                    <Popup>
+                      <div style={{ minWidth: 200, fontFamily: "Inter, sans-serif" }}>
+                        {/* Header stripe */}
+                        <div style={{
+                          margin: "-8px -8px 10px -8px",
+                          padding: "8px 12px",
+                          background: `${cfg.color}18`,
+                          borderBottom: `2px solid ${cfg.color}44`,
+                          borderRadius: "10px 10px 0 0",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}>
+                          <span style={{ fontSize: 14 }}>{cfg.icon}</span>
+                          <div>
+                            <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: cfg.color, marginBottom: 1 }}>Official Restricted Zone</p>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: "#0f172a", lineHeight: 1.3 }}>{props.NAME_ENG}</p>
+                          </div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 10px", fontSize: 10 }}>
+                          {[
+                            ["Realm", props.REALM],
+                            ["Status", props.STATUS],
+                            ["Designation", props.DESIG?.split(" (")[0] || props.DESIG],
+                            ["IUCN Cat.", props.IUCN_CAT],
+                            ["Area", props.GIS_AREA ? `${props.GIS_AREA.toFixed(1)} km²` : "—"],
+                            ["Year", props.STATUS_YR || "—"],
+                          ].map(([label, val]) => (
+                            <div key={label}>
+                              <p style={{ color: "#94a3b8", fontWeight: 600, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
+                              <p style={{ color: "#1e293b", fontWeight: 500, marginTop: 1 }}>{val}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: cfg.color }} />
+                          <span style={{ fontSize: 9, color: cfg.color, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{realm} Protected Area · WDPA</span>
+                        </div>
+                      </div>
+                    </Popup>
+                  </Polygon>
+                ));
+              })
+            }
 
             {/* Geofence Polygons */}
             {geofences.map((geofence) => (
@@ -683,7 +826,7 @@ const DashboardPage = () => {
         </div>
 
         {/* Sidebar */}
-        <div className="w-80 flex flex-col gap-3 max-h-full overflow-y-auto">
+        <div className="w-full lg:w-80 flex flex-col gap-3 lg:max-h-full overflow-y-auto shrink-0">
           {/* Vessels List */}
           <div className="glass-card rounded-xl overflow-hidden flex flex-col">
             <div
@@ -693,7 +836,7 @@ const DashboardPage = () => {
               <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>Fleet Status</span>
               <span className="pro-badge">{vessels.length} Active</span>
             </div>
-            <div className="overflow-y-auto max-h-[290px] divide-y" style={{ borderColor: "var(--glass-border)" }}>
+            <div className="overflow-y-auto max-h-[380px] divide-y" style={{ borderColor: "var(--glass-border)" }}>
               {vessels.length === 0 ? (
                 <div className="p-8 text-center text-[12px]" style={{ color: "var(--text-muted)" }}>
                   <p>No active vessels</p>
@@ -781,7 +924,7 @@ const DashboardPage = () => {
               <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>Geofence Zones</span>
               <span className="pro-badge">{geofences.length} Total</span>
             </div>
-            <div className="overflow-y-auto max-h-[290px] divide-y" style={{ borderColor: "var(--glass-border)" }}>
+            <div className="overflow-y-auto max-h-[380px] divide-y" style={{ borderColor: "var(--glass-border)" }}>
               {geofences.length === 0 ? (
                 <div className="p-8 text-center text-[12px]" style={{ color: "var(--text-muted)" }}>
                   <p>No geofences defined</p>

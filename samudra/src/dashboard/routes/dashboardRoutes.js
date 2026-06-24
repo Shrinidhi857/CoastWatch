@@ -129,6 +129,53 @@ export const boatsAPI = {
       throw error;
     }
   },
+
+  /** Get all intrusion logs */
+  getIntrusions: async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/boats/intrusions`, {
+        method: "GET",
+        headers: apiHeaders,
+      });
+      if (!response.ok) throw new Error("Failed to fetch intrusions");
+      const data = await response.json();
+      return data.data || [];
+    } catch (error) {
+      console.error("[DashRoutes] Error fetching intrusions:", error);
+      throw error;
+    }
+  },
+
+  /** Log a new intrusion */
+  logIntrusion: async (intrusionData) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/boats/intrusions`, {
+        method: "POST",
+        headers: apiHeaders,
+        body: JSON.stringify(intrusionData),
+      });
+      if (!response.ok) throw new Error("Failed to log intrusion");
+      return await response.json();
+    } catch (error) {
+      console.error("[DashRoutes] Error logging intrusion:", error);
+      throw error;
+    }
+  },
+
+  /** Clear all intrusions */
+  clearIntrusions: async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/boats/intrusions`, {
+        method: "DELETE",
+        headers: apiHeaders,
+      });
+      if (!response.ok) throw new Error("Failed to clear intrusions");
+      return await response.json();
+    } catch (error) {
+      console.error("[DashRoutes] Error clearing intrusions:", error);
+      throw error;
+    }
+  },
 };
 
 // =============================================

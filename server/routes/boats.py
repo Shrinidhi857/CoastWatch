@@ -39,6 +39,82 @@ def get_boats():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+@boats_bp.route('/intrusions', methods=['GET'])
+def get_intrusions():
+    """
+    GET /api/boats/intrusions
+    Reads all historical vessel intrusion records from Firebase.
+    """
+    try:
+        ref = get_rtdb_ref('intrusion_history')
+        data = ref.get()
+
+        if not data:
+            return jsonify({'status': 'success', 'data': []}), 200
+
+        intrusions = []
+        for push_key, entry in sorted(data.items(), reverse=True): # Newest first
+            if not isinstance(entry, dict):
+                continue
+            entry['id'] = push_key
+            intrusions.append(entry)
+
+        return jsonify({
+            'status': 'success',
+            'data': intrusions
+        }), 200
+
+    except Exception as e:
+        print(f"[ERROR] get_intrusions: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@boats_bp.route('/intrusions', methods=['POST'])
+def add_intrusion():
+    """
+    POST /api/boats/intrusions
+    Saves a new vessel intrusion entry to Firebase.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+
+        required_fields = ['boatId', 'entryTime', 'exitTime', 'duration']
+        for f in required_fields:
+            if f not in data:
+                return jsonify({'status': 'error', 'message': f'Missing required field: {f}'}), 400
+
+        ref = get_rtdb_ref('intrusion_history')
+        new_ref = ref.push(data)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Intrusion logged successfully',
+            'id': new_ref.key
+        }), 201
+
+    except Exception as e:
+        print(f"[ERROR] add_intrusion: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@boats_bp.route('/intrusions', methods=['DELETE'])
+def clear_intrusions():
+    """
+    DELETE /api/boats/intrusions
+    Clears all vessel intrusion history from Firebase.
+    """
+    try:
+        ref = get_rtdb_ref('intrusion_history')
+        ref.delete()
+        return jsonify({'status': 'success', 'message': 'Intrusion history cleared successfully'}), 200
+
+    except Exception as e:
+        print(f"[ERROR] clear_intrusions: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 @boats_bp.route('/<boat_id>', methods=['GET'])
 def get_boat(boat_id):
     """GET /api/boats/<boat_id> — single boat from Realtime DB"""

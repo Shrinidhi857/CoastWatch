@@ -1,31 +1,44 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { DashboardPage } from "./dashboard";
 import { SimulationPage } from "./simulation";
 import HistoryPage from "./simulation/HistoryPage";
+import { boatsAPI } from "./dashboard/routes/dashboardRoutes";
 
 function App() {
   const [currentPage, setCurrentPage] = useState("dashboard");
-  const [history, setHistory] = useState(() => {
-    try {
-      const saved = localStorage.getItem("coastwatch_simulation_history");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error("Error reading simulation history from localStorage:", e);
-      return [];
-    }
-  });
+  const [history, setHistory] = useState([]);
 
-  const addHistoryItem = (item) => {
-    setHistory((prev) => {
-      const updated = [item, ...prev];
-      localStorage.setItem("coastwatch_simulation_history", JSON.stringify(updated));
-      return updated;
-    });
+  // Fetch history on load
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const data = await boatsAPI.getIntrusions();
+        setHistory(data);
+      } catch (err) {
+        console.error("Error fetching historical intrusions:", err);
+      }
+    };
+    fetchHistory();
+  }, []);
+
+  const addHistoryItem = async (item) => {
+    try {
+      await boatsAPI.logIntrusion(item);
+      const latestHistory = await boatsAPI.getIntrusions();
+      setHistory(latestHistory);
+    } catch (err) {
+      console.error("Failed to log intrusion to server, using local fallback:", err);
+      setHistory((prev) => [item, ...prev]);
+    }
   };
 
-  const clearHistory = () => {
-    setHistory([]);
-    localStorage.removeItem("coastwatch_simulation_history");
+  const clearHistory = async () => {
+    try {
+      await boatsAPI.clearIntrusions();
+      setHistory([]);
+    } catch (err) {
+      console.error("Failed to clear intrusion history on server:", err);
+    }
   };
 
   return (
