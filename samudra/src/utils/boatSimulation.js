@@ -1140,6 +1140,9 @@ export const REAL_WORLD_PATH = [
     74.66526186276553
   ]
 ];
+export const COLLECTED_DATA = REAL_WORLD_PATH;
+export const SYNTHETIC_BOAT_DATA_COAST = REAL_WORLD_PATH;
+
 
 /**
  * Restricted zone polygon around Udupi area

@@ -74,6 +74,7 @@ def add_intrusion():
     """
     POST /api/boats/intrusions
     Saves a new vessel intrusion entry to Firebase.
+    Accepts the full enriched payload including classification fields.
     """
     try:
         data = request.get_json()
@@ -84,6 +85,26 @@ def add_intrusion():
         for f in required_fields:
             if f not in data:
                 return jsonify({'status': 'error', 'message': f'Missing required field: {f}'}), 400
+
+        # Enrich with classification if not already present
+        if 'isLegal' not in data:
+            speed = float(data.get('actualSpeed', data.get('avgSpeed', 0)))
+            actual_dur = float(data.get('duration', 0))
+            expected = data.get('expectedSpeed')
+            try:
+                from routes.alerts import _classify_activity
+                classification = _classify_activity(
+                    actual_dur, speed,
+                    float(expected) if expected else None
+                )
+                data.setdefault('isLegal', classification['is_legal'])
+                data.setdefault('isSuspicious', not classification['is_legal'])
+                data.setdefault('category', classification['category'])
+                data.setdefault('classificationLabel', classification['label'])
+                data.setdefault('classificationReason', classification['reason'])
+                data.setdefault('estDurationMin', classification['est_duration_min'])
+            except Exception:
+                pass
 
         ref = get_rtdb_ref('intrusion_history')
         new_ref = ref.push(data)
@@ -97,6 +118,7 @@ def add_intrusion():
     except Exception as e:
         print(f"[ERROR] add_intrusion: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 
 @boats_bp.route('/intrusions', methods=['DELETE'])

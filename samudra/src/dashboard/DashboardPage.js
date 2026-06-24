@@ -148,6 +148,7 @@ const DashboardPage = () => {
   const [geofences, setGeofences] = useState([]);
   const [drawMode, setDrawMode] = useState(false);
   const [alerts, setAlerts] = useState([]);
+  const [intrusionLog, setIntrusionLog] = useState([]);  // enriched per-boat records
   const [drawnPolygon, setDrawnPolygon] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -260,11 +261,15 @@ const DashboardPage = () => {
     }
   };
 
-  // Fetch alerts from server
+  // Fetch alerts from server (enriched with intrusion log)
   const fetchAlerts = async () => {
     try {
-      const alertsData = await alertsAPI.getAll();
+      const [alertsData, logData] = await Promise.all([
+        alertsAPI.getAll(),
+        alertsAPI.getIntrusionLog().catch(() => []),
+      ]);
       setAlerts(alertsData);
+      setIntrusionLog(logData);
     } catch (err) {
       console.error("Error fetching alerts:", err);
     }
@@ -507,50 +512,131 @@ const DashboardPage = () => {
         {/* Map Container */}
         <div className="flex-1 relative min-h-[450px] lg:h-full rounded-xl overflow-hidden shadow-2xl" style={{ border: "1px solid #e2e8f0" }}>
           {/* Alerts Section (Floating on Map) */}
-          {alerts.length > 0 && (
-            <div
-              className="absolute top-3 left-[56px] z-[1000] max-w-[320px] w-full flex flex-col gap-2 p-3.5 rounded-xl border animate-fade-in shadow-lg"
-              style={{
-                background: "rgba(255, 255, 255, 0.95)",
-                backdropFilter: "blur(8px)",
-                borderColor: "rgba(239, 68, 68, 0.25)",
-                maxHeight: "calc(100% - 24px)",
-              }}
-            >
-              <h3 className="text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: "#dc2626" }}>
-                <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse-dot 1.5s infinite" }}></span>
-                Restricted Violations ({alerts.length})
-              </h3>
-              <div className="overflow-y-auto flex flex-col gap-1.5 pr-0.5" style={{ maxHeight: "220px" }}>
-                {alerts.map((alert) => (
-                  <div
-                    key={`${alert.boat_id}-alert`}
-                    className="p-2.5 rounded-lg flex flex-col justify-between"
-                    style={{ background: "rgba(239, 68, 68, 0.04)", border: "1px solid rgba(239, 68, 68, 0.08)" }}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-semibold text-xs text-slate-900">{alert.boat_name}</p>
-                        <p className="text-[10px] mt-0.5 text-slate-500 font-mono">
+          {alerts.length > 0 && (() => {
+            // Merge intrusion log lookup by boat_id for enriched data
+            const logByBoat = {};
+            intrusionLog.forEach(r => { if (r.is_active) logByBoat[r.boat_id] = r; });
+
+            // Live clock tick for duration display — re-renders every 1s via key
+            const now = Date.now();
+
+            const fmtDuration = (seconds) => {
+              if (!seconds || seconds < 0) return '0s';
+              const s = Math.floor(seconds);
+              if (s < 60) return `${s}s`;
+              const m = Math.floor(s / 60);
+              if (m < 60) return `${m}m ${s % 60}s`;
+              return `${Math.floor(m / 60)}h ${m % 60}m`;
+            };
+
+            const fmtTime = (iso) => {
+              if (!iso) return '—';
+              try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+              catch { return '—'; }
+            };
+
+            const badgeStyle = (category) => {
+              if (category === 'illegal')    return { bg: 'rgba(239,68,68,0.13)',   color: '#dc2626', border: 'rgba(239,68,68,0.3)' };
+              if (category === 'suspicious') return { bg: 'rgba(234,179,8,0.13)',   color: '#ca8a04', border: 'rgba(234,179,8,0.3)' };
+              return                                { bg: 'rgba(34,197,94,0.10)',   color: '#16a34a', border: 'rgba(34,197,94,0.25)' };
+            };
+
+            return (
+              <div
+                className="absolute top-3 left-[56px] z-[1000] max-w-[340px] w-full flex flex-col gap-2 p-3.5 rounded-xl border animate-fade-in shadow-lg"
+                style={{
+                  background: "rgba(255, 255, 255, 0.96)",
+                  backdropFilter: "blur(8px)",
+                  borderColor: "rgba(239, 68, 68, 0.25)",
+                  maxHeight: "calc(100% - 24px)",
+                }}
+              >
+                <h3 className="text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: "#dc2626" }}>
+                  <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#ef4444", animation: "pulse-dot 1.5s infinite" }}></span>
+                  Restricted Violations ({alerts.length})
+                </h3>
+                <div className="overflow-y-auto flex flex-col gap-2 pr-0.5" style={{ maxHeight: "400px" }}>
+                  {alerts.map((alert) => {
+                    const log = logByBoat[alert.boat_id] || {};
+                    const classification = alert.classification || log.classification || {};
+                    const category = classification.category || (alert.isSuspicious ? 'suspicious' : 'legal');
+                    const badge = badgeStyle(category);
+
+                    // Compute live duration
+                    const entryTime = alert.entry_time || log.entry_time;
+                    let liveDurSec = alert.actual_duration_sec || 0;
+                    if (entryTime) {
+                      try {
+                        liveDurSec = Math.max(0, (now - new Date(entryTime).getTime()) / 1000);
+                      } catch {}
+                    }
+
+                    const estMin = alert.est_duration_min ?? log.est_duration_min;
+
+                    return (
+                      <div
+                        key={`${alert.boat_id}-alert`}
+                        className="rounded-xl flex flex-col gap-1.5"
+                        style={{ background: "rgba(239,68,68,0.03)", border: "1px solid rgba(239,68,68,0.10)", padding: "10px 12px" }}
+                      >
+                        {/* Row 1: Name + Classification badge */}
+                        <div className="flex justify-between items-start gap-2">
+                          <div>
+                            <p className="font-bold text-[12px] text-slate-900">{alert.boat_name}</p>
+                            {alert.geofence_name && (
+                              <p className="text-[9px] font-semibold uppercase tracking-wider mt-0.5" style={{ color: '#dc2626' }}>⚠ {alert.geofence_name}</p>
+                            )}
+                          </div>
+                          <span
+                            className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap"
+                            style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}
+                          >
+                            {classification.label || (category === 'illegal' ? '🔴 Illegal' : category === 'suspicious' ? '🟡 Suspicious' : '🟢 Legal')}
+                          </span>
+                        </div>
+
+                        {/* Row 2: Coordinates */}
+                        <p className="text-[10px] font-mono text-slate-400">
                           {alert.location.latitude.toFixed(5)}, {alert.location.longitude.toFixed(5)}
                         </p>
+
+                        {/* Row 3: Time grid */}
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-1 pt-1.5" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                          <div>
+                            <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Entry Time</p>
+                            <p className="text-[11px] font-mono font-semibold text-slate-700 mt-0.5">{fmtTime(entryTime)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Time Inside</p>
+                            <p className="text-[11px] font-mono font-bold mt-0.5" style={{ color: category === 'illegal' ? '#dc2626' : category === 'suspicious' ? '#ca8a04' : '#16a34a' }}>
+                              {fmtDuration(liveDurSec)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Est. Transit</p>
+                            <p className="text-[11px] font-mono text-slate-600 mt-0.5">
+                              {estMin != null ? `${estMin.toFixed(1)} min` : '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Speed</p>
+                            <p className="text-[11px] font-mono text-slate-600 mt-0.5">{alert.speed} km/h</p>
+                          </div>
+                        </div>
+
+                        {/* Row 4: Reason */}
+                        {classification.reason && (
+                          <p className="text-[9px] mt-0.5 italic" style={{ color: category === 'illegal' ? '#dc2626' : category === 'suspicious' ? '#b45309' : '#15803d' }}>
+                            {classification.reason}
+                          </p>
+                        )}
                       </div>
-                      <span
-                        className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded"
-                        style={{ background: alert.severity === "high" ? "rgba(239,68,68,0.12)" : "rgba(234,88,12,0.12)", color: alert.severity === "high" ? "#dc2626" : "#ea580c" }}
-                      >
-                        {alert.severity}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] pt-1.5 mt-1 border-t border-slate-100 text-slate-500">
-                      <p>Speed: <span className="font-semibold text-slate-700">{alert.speed} km/h</span></p>
-                      <p className="text-[9px]">{alert.updated_at ? new Date(alert.updated_at).toLocaleTimeString() : ""}</p>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
           <MapContainer
             center={MAP_CONFIG.DEFAULT_CENTER}
             zoom={MAP_CONFIG.DEFAULT_ZOOM}

@@ -2,24 +2,57 @@ import React, { useState, useEffect } from "react";
 import { DashboardPage } from "./dashboard";
 import { SimulationPage } from "./simulation";
 import HistoryPage from "./simulation/HistoryPage";
-import { boatsAPI } from "./dashboard/routes/dashboardRoutes";
+import { boatsAPI, alertsAPI } from "./dashboard/routes/dashboardRoutes";
 
 function App() {
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [history, setHistory] = useState([]);
 
-  // Fetch history on load
+  // Fetch enriched intrusion history on load
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const data = await boatsAPI.getIntrusions();
-        setHistory(data);
+        // Try enriched intrusion-log first (has classification, est. duration, etc.)
+        const logData = await alertsAPI.getIntrusionLog();
+        if (logData && logData.length > 0) {
+          // Normalise field names so HistoryPage works with both sources
+          const normalised = logData
+            .filter(r => !r.is_active)   // only completed records in history table
+            .map(r => ({
+              ...r,
+              id:          r.id,
+              boatId:      r.boat_id,
+              boatName:    r.boat_name,
+              entryTime:   r.entry_time,
+              exitTime:    r.exit_time,
+              duration:    String(r.actual_duration_sec || 0),
+              actualDurationSec: r.actual_duration_sec,
+              avgSpeed:    r.avg_speed_kmh,
+              estDurationMin: r.est_duration_min,
+              geofenceName: r.geofence_name,
+              category:    r.classification?.category,
+              classificationLabel:  r.classification?.label,
+              classificationReason: r.classification?.reason,
+              isLegal:     r.classification?.is_legal,
+              isSuspicious: !r.classification?.is_legal,
+            }));
+          setHistory(normalised);
+        } else {
+          // Fallback to raw intrusion_history
+          const data = await boatsAPI.getIntrusions();
+          setHistory(data);
+        }
       } catch (err) {
         console.error("Error fetching historical intrusions:", err);
+        try {
+          const data = await boatsAPI.getIntrusions();
+          setHistory(data);
+        } catch {}
       }
     };
     fetchHistory();
   }, []);
+
 
   const addHistoryItem = async (item) => {
     try {

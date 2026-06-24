@@ -29,6 +29,7 @@ Key improvements over the original:
 from flask import Blueprint, request, jsonify
 from firebase_init import db_firestore, get_rtdb_ref, coords_to_shapely
 from geofence_engine import GeofenceRecord, pip_ray_cast, build_geofence_record
+from datetime import datetime, timezone
 import threading
 import time
 
@@ -51,6 +52,14 @@ CACHE_TTL_SECONDS = 60  # Refresh geofences from Firestore every 60 s
 _cache_lock     = threading.Lock()
 _cached_records: dict[str, GeofenceRecord] = {}
 _cache_built_at: float = 0.0   # epoch timestamp of last full refresh
+
+# ---------------------------------------------------------------------------
+# Per-boat zone state — tracks whether each boat is currently inside a
+# restricted zone so we can fire entry/exit events exactly once.
+# Key: boat_id  →  Value: bool (True = inside restricted zone)
+# ---------------------------------------------------------------------------
+_boat_zone_state: dict[str, bool] = {}
+_boat_zone_lock  = threading.Lock()
 
 
 def _refresh_cache_if_stale() -> None:
@@ -190,12 +199,8 @@ def check_boat_in_geofence(boat_id):
 def check_all_boats_geofence():
     """
     Check every live boat against all active geofences in a single pass.
-
-    Performance gain vs. original:
-      Original: 50 boats × 20 geofences = 1 000 Shapely Polygon() objects
-                constructed per request.
-      New:      0 objects constructed — records are pre-built in the cache;
-                only AABB + arithmetic ray cast per (boat, geofence) pair.
+    Also auto-detects entry / exit transitions and writes zone_entry records
+    to Firebase so the alerts/intrusion-log endpoint can surface them.
     """
     try:
         boats_data = get_rtdb_ref('boats_live').get() or {}
@@ -211,6 +216,7 @@ def check_all_boats_geofence():
             gps = boat_raw.get('gps', {})
             lat: float = float(gps.get('latitude',  0))
             lng: float = float(gps.get('longitude', 0))
+            speed_kmh: float = float(gps.get('speed_kmh', 0))
 
             violations, safe_zones, _ = _classify_point(lng, lat, records)
 
@@ -234,6 +240,79 @@ def check_all_boats_geofence():
                     'violation_count': len(violations),
                     'geofences':       violations,
                 })
+
+            # ── Transition detection (entry / exit) ────────────────────────
+            with _boat_zone_lock:
+                was_inside = _boat_zone_state.get(boat_id, False)
+
+                if in_violation and not was_inside:
+                    # ── ENTRY event ──
+                    _boat_zone_state[boat_id] = True
+                    try:
+                        first_violation = violations[0] if violations else {}
+                        entry_record = {
+                            'boat_id':      boat_id,
+                            'boat_name':    boat_name,
+                            'entry_time':   datetime.now(timezone.utc).isoformat(),
+                            'lat':          lat,
+                            'lng':          lng,
+                            'geofence_id':  first_violation.get('geofence_id', ''),
+                            'geofence_name': first_violation.get('name', ''),
+                            'speed_kmh':    speed_kmh,
+                        }
+                        get_rtdb_ref(f'zone_entry/{boat_id}').set(entry_record)
+                        print(f'[GeofenceCheck] ENTRY: {boat_name} ({boat_id}) → {first_violation.get("name", "zone")}')
+                    except Exception as entry_err:
+                        print(f'[GeofenceCheck] Entry record error: {entry_err}')
+
+                elif not in_violation and was_inside:
+                    # ── EXIT event ──
+                    _boat_zone_state[boat_id] = False
+                    try:
+                        entry_ref  = get_rtdb_ref(f'zone_entry/{boat_id}')
+                        entry_rec  = entry_ref.get()
+                        if entry_rec and isinstance(entry_rec, dict):
+                            now_utc    = datetime.now(timezone.utc)
+                            exit_time  = now_utc.isoformat()
+                            actual_dur = 0.0
+                            try:
+                                entry_dt = datetime.fromisoformat(entry_rec['entry_time'])
+                                if entry_dt.tzinfo is None:
+                                    entry_dt = entry_dt.replace(tzinfo=timezone.utc)
+                                actual_dur = (now_utc - entry_dt).total_seconds()
+                            except Exception:
+                                pass
+
+                            # Classify and persist to intrusion_history
+                            from routes.alerts import _classify_activity
+                            classification = _classify_activity(actual_dur, float(entry_rec.get('speed_kmh', 0)))
+
+                            history_record = {
+                                'boatId':               boat_id,
+                                'boatName':             boat_name,
+                                'entryTime':            entry_rec['entry_time'],
+                                'exitTime':             exit_time,
+                                'duration':             str(round(actual_dur, 1)),
+                                'actualDurationSec':    actual_dur,
+                                'avgSpeed':             float(entry_rec.get('speed_kmh', 0)),
+                                'geofenceId':           entry_rec.get('geofence_id', ''),
+                                'geofenceName':         entry_rec.get('geofence_name', ''),
+                                'isLegal':              classification['is_legal'],
+                                'isSuspicious':         not classification['is_legal'],
+                                'category':             classification['category'],
+                                'classificationLabel':  classification['label'],
+                                'classificationReason': classification['reason'],
+                                'estDurationMin':       classification['est_duration_min'],
+                                'entryLat':             entry_rec.get('lat') or entry_rec.get('entryLat'),
+                                'entryLng':             entry_rec.get('lng') or entry_rec.get('entryLng'),
+                                'exitLat':              lat,
+                                'exitLng':              lng,
+                            }
+                            get_rtdb_ref('intrusion_history').push(history_record)
+                            entry_ref.delete()
+                            print(f'[GeofenceCheck] EXIT: {boat_name} ({boat_id}) — {classification["label"]}')
+                    except Exception as exit_err:
+                        print(f'[GeofenceCheck] Exit record error: {exit_err}')
 
         return jsonify({
             'status':             'success',

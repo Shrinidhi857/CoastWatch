@@ -19,6 +19,8 @@ import {
   getBoatIcon,
   REAL_WORLD_PATH,
   RESTRICTED_ZONE_POLYGON,
+  COLLECTED_DATA,
+  SYNTHETIC_BOAT_DATA_COAST,
 } from "./utils/boatSimulation";
 import {
   AlertManager,
@@ -36,7 +38,7 @@ const SimulationPage = ({ addHistoryItem }) => {
   const [boatState, setBoatState] = useState(null);
   const [simulationActive, setSimulationActive] = useState(false);
   const [simulationAlerts, setSimulationAlerts] = useState([]);
-  const [selectedPath, setSelectedPath] = useState("harbor_tour");
+  const [selectedPath, setSelectedPath] = useState("collected_data");
   const [boatTrail, setBoatTrail] = useState([]);
 
   // Speed and Intrusion Tracking State
@@ -94,9 +96,11 @@ const SimulationPage = ({ addHistoryItem }) => {
    */
   const initializeSimulation = (pathKey = selectedPath) => {
     const path =
-      pathKey === "harbor_tour"
-        ? REAL_WORLD_PATH
-        : SIMULATION_CONFIG.PREDEFINED_PATHS[pathKey] || REAL_WORLD_PATH;
+      pathKey === "collected_data"
+        ? COLLECTED_DATA
+        : pathKey === "synthetic_boat_data_coast"
+        ? SYNTHETIC_BOAT_DATA_COAST
+        : SIMULATION_CONFIG.PREDEFINED_PATHS[pathKey] || COLLECTED_DATA;
     const startPosition = path[0];
 
     const newBoatState = initializeBoat("sim-boat-1", startPosition, path);
@@ -156,6 +160,7 @@ const SimulationPage = ({ addHistoryItem }) => {
 
     if (activeSessionRef.current) {
       const exitTime = new Date();
+      const exitCoords = boatState.position;
       const duration = ((exitTime - activeSessionRef.current.entryTime) / 1000).toFixed(1);
       const finalSession = {
         id: `session-${Date.now()}`,
@@ -167,6 +172,8 @@ const SimulationPage = ({ addHistoryItem }) => {
         expectedSpeed: activeSessionRef.current.expectedSpeed,
         actualSpeed: activeSessionRef.current.actualSpeed,
         isSuspicious: activeSessionRef.current.isSuspicious,
+        entryCoords: activeSessionRef.current.entryCoords,
+        exitCoords,
       };
       addHistoryItem(finalSession);
       setActiveSession({
@@ -284,6 +291,7 @@ const SimulationPage = ({ addHistoryItem }) => {
             restrictedZoneEnteredRef.current = true;
 
             const entryTime = new Date();
+            const entryCoords = updatedState.position;
             const isSusp = checkIfSuspicious(actualSpeedRef.current, expectedSpeedRef.current);
             const session = {
               entryTime,
@@ -292,6 +300,7 @@ const SimulationPage = ({ addHistoryItem }) => {
               expectedSpeed: expectedSpeedRef.current,
               actualSpeed: actualSpeedRef.current,
               isSuspicious: isSusp,
+              entryCoords,
             };
             activeSessionRef.current = session;
             setActiveSession(session);
@@ -317,6 +326,7 @@ const SimulationPage = ({ addHistoryItem }) => {
 
             if (activeSessionRef.current) {
               const exitTime = new Date();
+              const exitCoords = updatedState.position;
               const duration = ((exitTime - activeSessionRef.current.entryTime) / 1000).toFixed(1);
               const finalSession = {
                 id: `session-${Date.now()}`,
@@ -328,6 +338,8 @@ const SimulationPage = ({ addHistoryItem }) => {
                 expectedSpeed: activeSessionRef.current.expectedSpeed,
                 actualSpeed: activeSessionRef.current.actualSpeed,
                 isSuspicious: activeSessionRef.current.isSuspicious,
+                entryCoords: activeSessionRef.current.entryCoords,
+                exitCoords,
               };
 
               addHistoryItem(finalSession);
@@ -353,6 +365,7 @@ const SimulationPage = ({ addHistoryItem }) => {
         if (!updatedState.isMoving) {
           if (activeSessionRef.current) {
             const exitTime = new Date();
+            const exitCoords = updatedState.position;
             const duration = ((exitTime - activeSessionRef.current.entryTime) / 1000).toFixed(1);
             const finalSession = {
               id: `session-${Date.now()}`,
@@ -364,6 +377,8 @@ const SimulationPage = ({ addHistoryItem }) => {
               expectedSpeed: activeSessionRef.current.expectedSpeed,
               actualSpeed: activeSessionRef.current.actualSpeed,
               isSuspicious: activeSessionRef.current.isSuspicious,
+              entryCoords: activeSessionRef.current.entryCoords,
+              exitCoords,
             };
 
             addHistoryItem(finalSession);
@@ -441,7 +456,8 @@ const SimulationPage = ({ addHistoryItem }) => {
               className="rounded-lg px-3 py-1.5 text-[12px] font-medium focus:outline-none"
               style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--glass-border)", color: "var(--text-secondary)", minWidth: 160, height: 32 }}
             >
-              <option value="harbor_tour">Harbor Tour</option>
+              <option value="collected_data">Collected data</option>
+              <option value="synthetic_boat_data_coast">Synthetic boat data in coast</option>
               <option value="coastal_patrol">Coastal Patrol</option>
               <option value="restricted_zone_approach">Restricted Zone Approach</option>
             </select>

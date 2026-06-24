@@ -344,6 +344,62 @@ export const alertsAPI = {
       throw error;
     }
   },
+
+  /**
+   * Get enriched intrusion log (active + historical).
+   * Each record: { entry_time, exit_time, est_duration_min,
+   *               actual_duration_sec, classification, is_active, ... }
+   */
+  getIntrusionLog: async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/alerts/intrusion-log`, {
+        method: "GET",
+        headers: apiHeaders,
+      });
+      if (!response.ok) throw new Error("Failed to fetch intrusion log");
+      const data = await response.json();
+      return data.log || [];
+    } catch (error) {
+      console.error("[DashRoutes] Error fetching intrusion log:", error);
+      return [];
+    }
+  },
+
+  /**
+   * Record a boat entering a restricted zone.
+   * @param {{ boat_id, boat_name, lat, lng, geofence_id, geofence_name, speed_kmh }} data
+   */
+  recordZoneEntry: async (data) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/alerts/zone-entry`, {
+        method: "POST",
+        headers: apiHeaders,
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error("Failed to record zone entry");
+      return await response.json();
+    } catch (error) {
+      console.error("[DashRoutes] Error recording zone entry:", error);
+    }
+  },
+
+  /**
+   * Record a boat exiting a restricted zone.
+   * @param {{ boat_id, expected_speed_kmh? }} data
+   */
+  recordZoneExit: async (data) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/alerts/zone-exit`, {
+        method: "POST",
+        headers: apiHeaders,
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error("Failed to record zone exit");
+      return await response.json();
+    } catch (error) {
+      console.error("[DashRoutes] Error recording zone exit:", error);
+    }
+  },
 };
 
 // =============================================
