@@ -10,9 +10,12 @@ const HistoryPage = ({ history, clearHistory }) => {
   // Helper to format path name
   const formatPathName = (pathKey) => {
     switch (pathKey) {
-      case "harbor_tour":           return "Harbor Tour";
-      case "coastal_patrol":        return "Coastal Patrol";
-      case "restricted_zone_approach": return "Restricted Zone Approach";
+      case "collected_data":              return "Collected Data";
+      case "collected_data_illegal":      return "Collected Data — Illegal Route";
+      case "synthetic_boat_data_coast":   return "Synthetic Boat Data in Coast";
+      case "harbor_tour":                 return "Harbor Tour";
+      case "coastal_patrol":              return "Coastal Patrol";
+      case "restricted_zone_approach":    return "Restricted Zone Approach";
       default: return pathKey || "Custom Route";
     }
   };
@@ -325,88 +328,178 @@ const HistoryPage = ({ history, clearHistory }) => {
                   </div>
 
                   {/* Expanded Content Details Drawer */}
-                  {isExpanded && (
+                  {isExpanded && (() => {
+                    const expectedSpd = parseFloat(item.expectedSpeed ?? item.estSpeed ?? 0);
+                    const actualSpd   = speed; // already parsed above
+                    const speedDevPct = expectedSpd > 0
+                      ? (((actualSpd - expectedSpd) / expectedSpd) * 100)
+                      : null;
+                    const durRatio = (() => {
+                      const estSec = estMinutes != null ? estMinutes * 60 : null;
+                      return estSec && estSec > 0 ? (actualSec / estSec) : null;
+                    })();
+
+                    const illegalVerdict = (() => {
+                      if (category === 'illegal')    return { label: '🔴 ILLEGAL ACTIVITY', color: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)' };
+                      if (category === 'suspicious') return { label: '🟡 SUSPICIOUS', color: '#f59e0b', bg: 'rgba(234,179,8,0.10)', border: 'rgba(234,179,8,0.3)' };
+                      return { label: '🟢 LEGAL TRANSIT', color: '#22c55e', bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.25)' };
+                    })();
+
+                    return (
                     <div className="px-6 pb-5 pt-4 border-t border-white/[0.05] bg-black/10 text-[12px] text-slate-300 space-y-4 animate-fade-in">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {/* Box 1: Coordinates details */}
-                        <div className="p-3.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+
+                      {/* ── Verdict Banner ─────────────────────────────────── */}
+                      <div
+                        className="flex items-center justify-between px-4 py-3 rounded-xl border"
+                        style={{ background: illegalVerdict.bg, borderColor: illegalVerdict.border }}
+                      >
+                        <div className="flex items-center gap-2">
+                          {category === 'illegal' && (
+                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                          )}
+                          <span className="font-bold text-[12px] tracking-wider" style={{ color: illegalVerdict.color }}>
+                            {illegalVerdict.label}
+                          </span>
+                        </div>
+                        <span className="text-[11px] italic" style={{ color: illegalVerdict.color, opacity: 0.85 }}>
+                          {badge.reason}
+                        </span>
+                      </div>
+
+                      {/* ── Detail Grid ────────────────────────────────────── */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
+                        {/* Box 1: Entry / Exit Times */}
+                        <div className="p-3.5 rounded-lg bg-white/[0.02] border border-white/[0.04] col-span-1">
                           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">
-                            📍 Transition Coordinates
+                            🕒 Zone Times
                           </h4>
                           <div className="space-y-2">
                             <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
-                              <span className="text-slate-400">Entry Coordinates</span>
-                              <span className="font-mono text-slate-200 font-medium">
-                                {item.entryLat !== undefined && item.entryLng !== undefined && item.entryLat !== null && item.entryLng !== null ? (
-                                  <span>{parseFloat(item.entryLat).toFixed(6)}, {parseFloat(item.entryLng).toFixed(6)}</span>
-                                ) : '—'}
+                              <span className="text-slate-400">Entry Time</span>
+                              <span className="font-mono text-green-400 font-semibold text-[11px]">
+                                {formatTime(item.entryTime)}
                               </span>
                             </div>
+                            <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                              <span className="text-slate-400">Exit Time</span>
+                              {item.exitTime ? (
+                                <span className="font-mono text-amber-400 font-semibold text-[11px]">
+                                  {formatTime(item.exitTime)}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-red-400 animate-pulse">Still Inside</span>
+                              )}
+                            </div>
                             <div className="flex justify-between items-center py-1">
-                              <span className="text-slate-400">Exit Coordinates</span>
-                              <span className="font-mono text-slate-200 font-medium">
-                                {item.exitLat !== undefined && item.exitLng !== undefined && item.exitLat !== null && item.exitLng !== null ? (
-                                  <span>{parseFloat(item.exitLat).toFixed(6)}, {parseFloat(item.exitLng).toFixed(6)}</span>
-                                ) : 'Still Inside / N/A'}
+                              <span className="text-slate-400">Duration</span>
+                              <span className="font-mono font-bold text-[12px]" style={{
+                                color: category === 'illegal' ? '#ef4444' : category === 'suspicious' ? '#f59e0b' : '#22c55e'
+                              }}>
+                                {formatDuration(actualSec)}
                               </span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Box 2: Transit Telemetry */}
-                        <div className="p-3.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                        {/* Box 2: Speed Analysis */}
+                        <div className="p-3.5 rounded-lg bg-white/[0.02] border border-white/[0.04] col-span-1">
                           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">
-                            ⏳ Transit Duration Analysis
+                            🚤 Speed Analysis
                           </h4>
                           <div className="space-y-2">
                             <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
-                              <span className="text-slate-400">Actual Time In Zone</span>
+                              <span className="text-slate-400">Actual Avg Speed</span>
+                              <span className="font-mono text-slate-200 font-bold text-[12px]">
+                                {actualSpd > 0 ? `${actualSpd.toFixed(1)} km/h` : '—'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                              <span className="text-slate-400">Expected Speed</span>
+                              <span className="font-mono text-slate-300 text-[11px]">
+                                {expectedSpd > 0 ? `${expectedSpd.toFixed(1)} km/h` : '—'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                              <span className="text-slate-400">Speed Deviation</span>
+                              {speedDevPct !== null ? (
+                                <span className="font-mono font-bold text-[11px]" style={{
+                                  color: Math.abs(speedDevPct) > 50 ? '#ef4444' : Math.abs(speedDevPct) > 25 ? '#f59e0b' : '#22c55e'
+                                }}>
+                                  {speedDevPct > 0 ? '+' : ''}{speedDevPct.toFixed(1)}%
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">—</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Box 3: Transit Duration */}
+                        <div className="p-3.5 rounded-lg bg-white/[0.02] border border-white/[0.04] col-span-1">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">
+                            ⏳ Duration Comparison
+                          </h4>
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                              <span className="text-slate-400">Actual In Zone</span>
                               <span className="font-mono text-slate-200 font-bold">
                                 {formatDuration(actualSec)}
                               </span>
                             </div>
-                            <div className="flex justify-between items-center py-1">
-                              <span className="text-slate-400">Estimated Transit Time</span>
-                              <span className="font-mono text-slate-200">
+                            <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                              <span className="text-slate-400">Expected Transit</span>
+                              <span className="font-mono text-slate-300">
                                 {estMinutes != null ? (
                                   estMinutes < 1
-                                    ? `${(estMinutes * 60).toFixed(0)} seconds`
-                                    : `${estMinutes.toFixed(1)} minutes`
+                                    ? `${(estMinutes * 60).toFixed(0)}s`
+                                    : `${estMinutes.toFixed(1)} min`
                                 ) : '—'}
                               </span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                              <span className="text-slate-400">Duration Ratio</span>
+                              {durRatio !== null ? (
+                                <span className="font-mono font-bold text-[11px]" style={{
+                                  color: durRatio > 3 ? '#ef4444' : durRatio > 2 ? '#f59e0b' : '#22c55e'
+                                }}>
+                                  {durRatio.toFixed(1)}× est.
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">—</span>
+                              )}
                             </div>
                           </div>
                         </div>
 
-                        {/* Box 3: Security & Deviation Classification */}
-                        <div className="p-3.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                        {/* Box 4: Coordinates */}
+                        <div className="p-3.5 rounded-lg bg-white/[0.02] border border-white/[0.04] col-span-1">
                           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">
-                            👮 Security Classification
+                            📍 Coordinates
                           </h4>
                           <div className="space-y-2">
                             <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
-                              <span className="text-slate-400">Suspicious Flag</span>
-                              {isSuspicious ? (
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">
-                                  Suspicious 🚩
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">
-                                  Normal transit ✓
-                                </span>
-                              )}
+                              <span className="text-slate-400">Entry</span>
+                              <span className="font-mono text-slate-200 font-medium text-[10px]">
+                                {item.entryLat != null && item.entryLng != null ? (
+                                  `${parseFloat(item.entryLat).toFixed(5)}, ${parseFloat(item.entryLng).toFixed(5)}`
+                                ) : '—'}
+                              </span>
                             </div>
-                            <div className="flex justify-between items-start py-1">
-                              <span className="text-slate-400 shrink-0">Analysis Reason</span>
-                              <span className="text-right text-slate-200 italic font-medium leading-normal max-w-[180px]">
-                                {badge.reason}
+                            <div className="flex justify-between items-center py-1">
+                              <span className="text-slate-400">Exit</span>
+                              <span className="font-mono text-slate-200 font-medium text-[10px]">
+                                {item.exitLat != null && item.exitLng != null ? (
+                                  `${parseFloat(item.exitLat).toFixed(5)}, ${parseFloat(item.exitLng).toFixed(5)}`
+                                ) : 'Still Inside'}
                               </span>
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               );
             })}

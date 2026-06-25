@@ -18,6 +18,7 @@ import {
   alertsAPI,
   systemAPI,
   depthAPI,
+  geofenceCheckAPI,
 } from "./routes/dashboardRoutes";
 import {
   formatBoatFromServer,
@@ -145,6 +146,15 @@ const HeatmapLayer = () => {
 
 const DashboardPage = () => {
   const [vessels, setVessels] = useState([]);
+  // eslint-disable-next-line no-unused-vars
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
   const [geofences, setGeofences] = useState([]);
   const [drawMode, setDrawMode] = useState(false);
   const [alerts, setAlerts] = useState([]);
@@ -264,6 +274,9 @@ const DashboardPage = () => {
   // Fetch alerts from server (enriched with intrusion log)
   const fetchAlerts = async () => {
     try {
+      // Trigger geofence checks for all boats on the server to update entry/exit transitions
+      await geofenceCheckAPI.checkAllBoats().catch((err) => console.error("Error running geofence check:", err));
+
       const [alertsData, logData] = await Promise.all([
         alertsAPI.getAll(),
         alertsAPI.getIntrusionLog().catch(() => []),
@@ -432,35 +445,48 @@ const DashboardPage = () => {
         </div>
 
         {/* WDPA Realm filter tabs */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-widest mr-1" style={{ color: "var(--text-muted)" }}>Protected Zones</span>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--glass-border)" }}>
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)", marginRight: 4 }}>Protected Zones</span>
           <button
             onClick={() => setShowWdpa(!showWdpa)}
-            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all"
+            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 focus:outline-none"
             style={showWdpa
-              ? { background: "rgba(239,68,68,0.10)", color: "#dc2626", border: "1px solid rgba(239,68,68,0.22)" }
-              : { background: "rgba(100,116,139,0.08)", color: "#64748b", border: "1px solid #e2e8f0" }}
-            title={showWdpa ? "Hide all WDPA zones" : "Show WDPA zones"}
+              ? { background: "linear-gradient(135deg, #ef4444, #dc2626)", color: "#ffffff", border: "1px solid rgba(239,68,68,0.2)", boxShadow: "0 2px 8px rgba(239,68,68,0.25)" }
+              : { background: "rgba(255,255,255,0.05)", color: "var(--text-secondary)", border: "1px solid var(--glass-border)" }}
+            title={showWdpa ? "Hide all protected zones" : "Show protected zones"}
           >
-            {showWdpa ? "🔴 Visible" : "⬜ Hidden"}
+            <span style={{ 
+              display: "inline-block", 
+              width: 6, 
+              height: 6, 
+              borderRadius: "50%", 
+              background: showWdpa ? "#ffffff" : "#94a3b8",
+              boxShadow: showWdpa ? "0 0 6px #ffffff" : "none"
+            }}></span>
+            {showWdpa ? "Visible" : "Hidden"}
           </button>
-          {showWdpa && ALL_REALMS.map((realm) => {
-            const cfg = REALM_CONFIG[realm];
-            const active = activeRealms.has(realm);
-            return (
-              <button
-                key={realm}
-                onClick={() => toggleRealm(realm)}
-                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all"
-                style={active
-                  ? { background: `${cfg.color}18`, color: cfg.color, border: `1px solid ${cfg.color}44` }
-                  : { background: "rgba(100,116,139,0.06)", color: "#94a3b8", border: "1px solid #e2e8f0", textDecoration: "line-through" }}
-                title={`${active ? "Hide" : "Show"} ${cfg.label} zones`}
-              >
-                {cfg.icon} {cfg.label}
-              </button>
-            );
-          })}
+          {showWdpa && (
+            <div className="flex items-center gap-1.5 border-l pl-2.5 animate-fade-in" style={{ borderColor: "var(--glass-border)" }}>
+              {ALL_REALMS.map((realm) => {
+                const cfg = REALM_CONFIG[realm];
+                const active = activeRealms.has(realm);
+                return (
+                  <button
+                    key={realm}
+                    onClick={() => toggleRealm(realm)}
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 focus:outline-none"
+                    style={active
+                      ? { background: `${cfg.color}15`, color: cfg.color, border: `1px solid ${cfg.color}35`, boxShadow: `0 1px 2px ${cfg.color}08` }
+                      : { background: "transparent", color: "var(--text-muted)", border: "1px solid transparent", opacity: 0.5 }}
+                    title={`${active ? "Hide" : "Show"} ${cfg.label} zones`}
+                  >
+                    <span>{cfg.icon}</span>
+                    <span>{cfg.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2">
@@ -601,26 +627,32 @@ const DashboardPage = () => {
                         </p>
 
                         {/* Row 3: Time grid */}
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-1 pt-1.5" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-1 pt-1.5" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
                           <div>
                             <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Entry Time</p>
                             <p className="text-[11px] font-mono font-semibold text-slate-700 mt-0.5">{fmtTime(entryTime)}</p>
                           </div>
                           <div>
-                            <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Time Inside</p>
+                            <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Exit Time</p>
+                            <p className="text-[11px] font-mono font-semibold text-slate-700 mt-0.5">
+                              {alert.exit_time ? fmtTime(alert.exit_time) : <span className="text-red-500 font-semibold">Still Inside</span>}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Duration inside zone</p>
                             <p className="text-[11px] font-mono font-bold mt-0.5" style={{ color: category === 'illegal' ? '#dc2626' : category === 'suspicious' ? '#ca8a04' : '#16a34a' }}>
                               {fmtDuration(liveDurSec)}
                             </p>
                           </div>
                           <div>
+                            <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Speed</p>
+                            <p className="text-[11px] font-mono text-slate-600 mt-0.5">{alert.speed} km/h</p>
+                          </div>
+                          <div className="col-span-2">
                             <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Est. Transit</p>
                             <p className="text-[11px] font-mono text-slate-600 mt-0.5">
                               {estMin != null ? `${estMin.toFixed(1)} min` : '—'}
                             </p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] uppercase tracking-wider font-semibold text-slate-400">Speed</p>
-                            <p className="text-[11px] font-mono text-slate-600 mt-0.5">{alert.speed} km/h</p>
                           </div>
                         </div>
 
@@ -680,10 +712,10 @@ const DashboardPage = () => {
                     key={`wdpa-${props.SITE_ID}-${ri}`}
                     positions={positions}
                     pathOptions={{
-                      color: cfg.color,
+                      color: "#ef4444",
                       weight: 1.5,
                       opacity: 0.75,
-                      fillColor: cfg.fill,
+                      fillColor: "#ef4444",
                       fillOpacity: 0.12,
                       dashArray: "4 3",
                     }}
@@ -922,67 +954,179 @@ const DashboardPage = () => {
               <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>Fleet Status</span>
               <span className="pro-badge">{vessels.length} Active</span>
             </div>
-            <div className="overflow-y-auto max-h-[380px] divide-y" style={{ borderColor: "var(--glass-border)" }}>
+            <div className="overflow-y-auto max-h-[500px] divide-y" style={{ borderColor: "var(--glass-border)" }}>
               {vessels.length === 0 ? (
                 <div className="p-8 text-center text-[12px]" style={{ color: "var(--text-muted)" }}>
                   <p>No active vessels</p>
                   <p className="mt-1 text-[11px]">Vessels will appear automatically.</p>
                 </div>
-              ) : (
-                vessels.map((vessel) => {
+              ) : (() => {
+                // Build lookup maps from live alerts and intrusion log
+                const alertByBoat = {};
+                alerts.forEach(a => { alertByBoat[a.boat_id] = a; });
+                const activeLogByBoat = {};
+                intrusionLog.forEach(r => { if (r.is_active) activeLogByBoat[r.boat_id] = r; });
+
+                const fmtVesselDur = (secs) => {
+                  if (!secs || secs < 0) return '0s';
+                  const s = Math.floor(secs);
+                  if (s < 60) return `${s}s`;
+                  const m = Math.floor(s / 60);
+                  if (m < 60) return `${m}m ${s % 60}s`;
+                  return `${Math.floor(m / 60)}h ${m % 60}m`;
+                };
+                const fmtVesselTime = (iso) => {
+                  if (!iso) return '—';
+                  try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+                  catch { return '—'; }
+                };
+
+                return vessels.map((vessel) => {
                   const inGeofence = vessel.in_restricted_zone || false;
+                  const alertRec   = alertByBoat[vessel.id];
+                  const logRec     = activeLogByBoat[vessel.id];
+
+                  // Zone intrusion enrichment — prefer live alert, fall back to intrusion log
+                  const classification = alertRec?.classification || logRec?.classification || {};
+                  const category = classification.category || (inGeofence ? 'suspicious' : null);
+                  const entryTime = alertRec?.entry_time || logRec?.entry_time;
+                  const zoneName  = alertRec?.geofence_name || logRec?.geofence_name || '';
+                  const avgSpd    = alertRec?.speed ?? logRec?.avg_speed_kmh ?? null;
+                  const estMin    = alertRec?.est_duration_min ?? logRec?.est_duration_min ?? null;
+
+                  // Live duration — recompute from entryTime for real-time ticking
+                  let liveDurSec = alertRec?.actual_duration_sec || 0;
+                  if (entryTime) {
+                    try { liveDurSec = Math.max(0, (Date.now() - new Date(entryTime).getTime()) / 1000); } catch {}
+                  }
+
+                  const verdictStyle = (() => {
+                    if (category === 'illegal')    return { color: '#ef4444', bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.25)', label: '🔴 Illegal' };
+                    if (category === 'suspicious') return { color: '#f59e0b', bg: 'rgba(234,179,8,0.10)',  border: 'rgba(234,179,8,0.25)',  label: '🟡 Suspicious' };
+                    return                                { color: '#22c55e', bg: 'rgba(34,197,94,0.10)',  border: 'rgba(34,197,94,0.25)',  label: '🟢 Legal' };
+                  })();
+
                   return (
-                    <div
-                      key={vessel.id}
-                      onClick={() => {
-                        if (pathVessel && pathVessel.id === vessel.id) {
-                          setSelectedVessel(vessel);
-                        } else {
-                          setSelectedVessel(null);
-                          setPathVessel(vessel);
-                          fetchBoatPath(vessel);
-                          if (mapRef.current) mapRef.current.setView([vessel.lat, vessel.lng], 14);
-                        }
-                      }}
-                      className="px-4 py-3 flex justify-between items-start cursor-pointer transition-all"
-                      style={{
-                        background: pathVessel && pathVessel.id === vessel.id
-                          ? "rgba(56,189,248,0.08)"
-                          : inGeofence ? "rgba(239,68,68,0.06)" : "transparent",
-                        borderLeft: pathVessel && pathVessel.id === vessel.id
-                          ? "3px solid rgba(56,189,248,0.7)"
-                          : inGeofence ? "3px solid rgba(239,68,68,0.6)" : "3px solid transparent",
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = pathVessel && pathVessel.id === vessel.id ? "rgba(56,189,248,0.13)" : inGeofence ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.03)"}
-                      onMouseLeave={e => e.currentTarget.style.background = pathVessel && pathVessel.id === vessel.id ? "rgba(56,189,248,0.08)" : inGeofence ? "rgba(239,68,68,0.06)" : "transparent"}
-                    >
-                      <div className="space-y-0.5">
-                        <h4 className="font-semibold text-[13px]" style={{ color: "var(--text-primary)" }}>{vessel.name}</h4>
-                        <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{vessel.vessel_type} · {vessel.speed} kn · {vessel.heading}°</p>
-                        <p className="text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>{vessel.lat.toFixed(4)}, {vessel.lng.toFixed(4)}</p>
+                    <div key={vessel.id}>
+                      {/* ── Main card row ── */}
+                      <div
+                        onClick={() => {
+                          if (pathVessel && pathVessel.id === vessel.id) {
+                            setSelectedVessel(vessel);
+                          } else {
+                            setSelectedVessel(null);
+                            setPathVessel(vessel);
+                            fetchBoatPath(vessel);
+                            if (mapRef.current) mapRef.current.setView([vessel.lat, vessel.lng], 14);
+                          }
+                        }}
+                        className="px-4 py-3 flex justify-between items-start cursor-pointer transition-all"
+                        style={{
+                          background: pathVessel && pathVessel.id === vessel.id
+                            ? "rgba(56,189,248,0.08)"
+                            : inGeofence ? "rgba(239,68,68,0.06)" : "transparent",
+                          borderLeft: pathVessel && pathVessel.id === vessel.id
+                            ? "3px solid rgba(56,189,248,0.7)"
+                            : inGeofence ? "3px solid rgba(239,68,68,0.6)" : "3px solid transparent",
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = pathVessel && pathVessel.id === vessel.id ? "rgba(56,189,248,0.13)" : inGeofence ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.03)"}
+                        onMouseLeave={e => e.currentTarget.style.background = pathVessel && pathVessel.id === vessel.id ? "rgba(56,189,248,0.08)" : inGeofence ? "rgba(239,68,68,0.06)" : "transparent"}
+                      >
+                        <div className="space-y-0.5 flex-1 min-w-0 mr-2">
+                          <h4 className="font-semibold text-[13px]" style={{ color: "var(--text-primary)" }}>{vessel.name}</h4>
+                          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{vessel.vessel_type} · {vessel.speed} kn · {vessel.heading}°</p>
+                          <p className="text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>{vessel.lat.toFixed(4)}, {vessel.lng.toFixed(4)}</p>
+                          {inGeofence && zoneName && (
+                            <p className="text-[9px] font-bold uppercase tracking-wider mt-0.5" style={{ color: '#dc2626' }}>⚠ {zoneName}</p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          <span
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                            style={vessel.status === "Active"
+                              ? { background: "rgba(34,197,94,0.1)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.2)" }
+                              : { background: "rgba(234,179,8,0.1)", color: "#facc15", border: "1px solid rgba(234,179,8,0.2)" }}
+                          >
+                            {vessel.status}
+                          </span>
+                          <button
+                            onClick={e => { e.stopPropagation(); deleteVessel(vessel.id); }}
+                            className="text-[11px] font-semibold px-1.5 py-0.5 rounded transition"
+                            style={{ color: "var(--text-muted)" }}
+                            onMouseEnter={e => { e.currentTarget.style.color = "#fca5a5"; e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
+                            title="Remove vessel"
+                          >✕</button>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <span
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded"
-                          style={vessel.status === "Active"
-                            ? { background: "rgba(34,197,94,0.1)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.2)" }
-                            : { background: "rgba(234,179,8,0.1)", color: "#facc15", border: "1px solid rgba(234,179,8,0.2)" }}
+
+                      {/* ── Zone intrusion detail panel (only when in restricted zone) ── */}
+                      {inGeofence && (
+                        <div
+                          className="mx-3 mb-3 px-3 py-2.5 rounded-xl text-[10px] space-y-2"
+                          style={{ background: "rgba(239,68,68,0.04)", border: "1px solid rgba(239,68,68,0.14)" }}
                         >
-                          {vessel.status}
-                        </span>
-                        <button
-                          onClick={e => { e.stopPropagation(); deleteVessel(vessel.id); }}
-                          className="text-[11px] font-semibold px-1.5 py-0.5 rounded transition"
-                          style={{ color: "var(--text-muted)" }}
-                          onMouseEnter={e => { e.currentTarget.style.color = "#fca5a5"; e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
-                          onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
-                          title="Remove vessel"
-                        >✕</button>
-                      </div>
+                          {/* Verdict badge row */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#dc2626' }}>
+                              🚫 Restricted Zone Intrusion
+                            </span>
+                            {category && (
+                              <span
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                                style={{ background: verdictStyle.bg, color: verdictStyle.color, border: `1px solid ${verdictStyle.border}` }}
+                              >
+                                {verdictStyle.label}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Time grid */}
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                            <div>
+                              <p className="text-[8px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>Entry Time</p>
+                              <p className="font-mono font-semibold mt-0.5" style={{ color: '#86efac', fontSize: 10 }}>
+                                {fmtVesselTime(entryTime)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[8px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>Time Inside</p>
+                              <p className="font-mono font-bold mt-0.5" style={{
+                                color: category === 'illegal' ? '#ef4444' : category === 'suspicious' ? '#f59e0b' : '#22c55e',
+                                fontSize: 10
+                              }}>
+                                {fmtVesselDur(liveDurSec)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[8px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>Avg Speed</p>
+                              <p className="font-mono mt-0.5" style={{ color: 'var(--text-secondary)', fontSize: 10 }}>
+                                {avgSpd != null ? `${parseFloat(avgSpd).toFixed(1)} km/h` : '—'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[8px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>Est. Transit</p>
+                              <p className="font-mono mt-0.5" style={{ color: 'var(--text-secondary)', fontSize: 10 }}>
+                                {estMin != null ? `${parseFloat(estMin).toFixed(1)} min` : '—'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Classification reason */}
+                          {classification.reason && (
+                            <p className="text-[9px] italic leading-relaxed pt-1" style={{
+                              color: category === 'illegal' ? '#fca5a5' : category === 'suspicious' ? '#fcd34d' : '#86efac',
+                              borderTop: '1px solid rgba(255,255,255,0.05)'
+                            }}>
+                              {classification.reason}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
-                })
-              )}
+                });
+              })()}
             </div>
           </div>
 

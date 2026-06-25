@@ -469,10 +469,33 @@ export const depthAPI = {
   },
 };
 
-export default {
+// =============================================
+// GEOFENCE CHECK OPERATIONS
+// =============================================
+
+export const geofenceCheckAPI = {
+  checkAllBoats: async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/geofence-check/all-boats`, {
+        method: "GET",
+        headers: apiHeaders,
+      });
+      if (!response.ok) throw new Error("Failed to check all boats");
+      return await response.json();
+    } catch (error) {
+      console.error("[DashRoutes] Error checking all boats:", error);
+      throw error;
+    }
+  },
+};
+
+const dashboardRoutes = {
   boats: boatsAPI,
   geofences: geofencesAPI,
+  geofenceCheck: geofenceCheckAPI,
   alerts: alertsAPI,
   system: systemAPI,
   depth: depthAPI,
 };
+
+export default dashboardRoutes;

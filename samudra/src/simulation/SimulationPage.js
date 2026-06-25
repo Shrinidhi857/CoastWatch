@@ -21,6 +21,7 @@ import {
   RESTRICTED_ZONE_POLYGON,
   COLLECTED_DATA,
   SYNTHETIC_BOAT_DATA_COAST,
+  COLLECTED_DATA_Illegal
 } from "./utils/boatSimulation";
 import {
   AlertManager,
@@ -100,6 +101,8 @@ const SimulationPage = ({ addHistoryItem }) => {
         ? COLLECTED_DATA
         : pathKey === "synthetic_boat_data_coast"
         ? SYNTHETIC_BOAT_DATA_COAST
+        : pathKey === "collected_data_illegal"
+        ? COLLECTED_DATA_Illegal
         : SIMULATION_CONFIG.PREDEFINED_PATHS[pathKey] || COLLECTED_DATA;
     const startPosition = path[0];
 
@@ -457,6 +460,7 @@ const SimulationPage = ({ addHistoryItem }) => {
               style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--glass-border)", color: "var(--text-secondary)", minWidth: 160, height: 32 }}
             >
               <option value="collected_data">Collected data</option>
+              <option value="collected_data_illegal">Collected Data — Illegal Route</option>
               <option value="synthetic_boat_data_coast">Synthetic boat data in coast</option>
               <option value="coastal_patrol">Coastal Patrol</option>
               <option value="restricted_zone_approach">Restricted Zone Approach</option>
